@@ -6,8 +6,6 @@
 
 The component itself knows nothing about SSH, S3, or any other protocol. It defines a small Go interface for file system operations (list, stat, home, roots, make directory, rename, delete); your application implements that interface with whatever mechanism it already has -- an SSH/SFTP session, a cloud API, the local disk, or an in-memory fake -- and gets a full-featured file browser UI in return.
 
-> **Status**: design stage. The interfaces described below are settled by the project plan but not yet implemented; expect this repository to change rapidly.
-
 ## Features
 
 - Directory browsing with breadcrumb-free, path-first navigation (editable path bar, parent / home buttons)
