@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>fsbrowser bindings 驗證</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 1.5rem; }
+  h1 { font-size: 1.1rem; }
+  section { margin-bottom: 1.2rem; }
+  pre { background: #f2f2f2; padding: 0.6rem; overflow-x: auto; white-space: pre-wrap; }
+  .ok { color: #0b6b2c; }
+  .err { color: #a03e34; }
+</style>
+</head>
+<body>
+<h1>fsbrowser P1 bindings 呼叫驗證</h1>
+<p>本頁於載入後依序呼叫橋接層 service 的每個方法, 並把結果原樣印出, 供人工驗證 bindings 可呼叫.</p>
+
+<section>
+  <h2>Home()</h2>
+  <pre id="out-home">(尚未呼叫)</pre>
+</section>
+<section>
+  <h2>Roots()</h2>
+  <pre id="out-roots">(尚未呼叫)</pre>
+</section>
+<section>
+  <h2>PathStyle()</h2>
+  <pre id="out-pathstyle">(尚未呼叫)</pre>
+</section>
+<section>
+  <h2>List("/home/user")</h2>
+  <pre id="out-list">(尚未呼叫)</pre>
+</section>
+<section>
+  <h2>Stat("/home/user/readme.txt")</h2>
+  <pre id="out-stat">(尚未呼叫)</pre>
+</section>
+<section>
+  <h2>MakeDir("/home/user/newdir") -&gt; List 確認</h2>
+  <pre id="out-makedir">(尚未呼叫)</pre>
+</section>
+<section>
+  <h2>Rename("/home/user/newdir", "/home/user/renamed")</h2>
+  <pre id="out-rename">(尚未呼叫)</pre>
+</section>
+<section>
+  <h2>Delete("/home/user/renamed")</h2>
+  <pre id="out-delete">(尚未呼叫)</pre>
+</section>
+<section>
+  <h2>Delete("/home/user/docs") 故意呼叫非空目錄, 驗證結構化錯誤 (應為 not_empty)</h2>
+  <pre id="out-error">(尚未呼叫)</pre>
+</section>
+
+<script type="module">
+import * as service from "./bindings/github.com/nexgus/fsbrowser/service/service.js";
+
+function show(id, value) {
+  document.getElementById(id).textContent = JSON.stringify(value, null, 2);
+  document.getElementById(id).className = "ok";
+}
+function showErr(id, err) {
+  document.getElementById(id).textContent =
+    "name: " + err.name + "\nmessage: " + err.message +
+    "\ncause: " + JSON.stringify(err.cause, null, 2);
+  document.getElementById(id).className = "err";
+}
+
+async function run() {
+  try { show("out-home", await service.Home()); } catch (e) { showErr("out-home", e); }
+  try { show("out-roots", await service.Roots()); } catch (e) { showErr("out-roots", e); }
+  try { show("out-pathstyle", await service.PathStyle()); } catch (e) { showErr("out-pathstyle", e); }
+  try { show("out-list", await service.List("/home/user")); } catch (e) { showErr("out-list", e); }
+  try { show("out-stat", await service.Stat("/home/user/readme.txt")); } catch (e) { showErr("out-stat", e); }
+
+  try {
+    await service.MakeDir("/home/user/newdir");
+    show("out-makedir", await service.List("/home/user"));
+  } catch (e) { showErr("out-makedir", e); }
+
+  try {
+    await service.Rename("/home/user/newdir", "/home/user/renamed");
+    show("out-rename", await service.Stat("/home/user/renamed"));
+  } catch (e) { showErr("out-rename", e); }
+
+  try {
+    await service.Delete("/home/user/renamed");
+    show("out-delete", "已刪除, 確認: " + JSON.stringify(await service.List("/home/user")));
+  } catch (e) { showErr("out-delete", e); }
+
+  try {
+    await service.Delete("/home/user/docs");
+    show("out-error", "未如預期拋出錯誤");
+  } catch (e) { showErr("out-error", e); }
+}
+
+run();
+</script>
+</body>
+</html>

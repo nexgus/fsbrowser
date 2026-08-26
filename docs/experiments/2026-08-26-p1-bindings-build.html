@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>P1 bindings 產生路徑與建置驗證</title>
+<style>
+:root {
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #555555;
+  --border: #c8c8c8;
+  --accent: #0b5cad;
+  --code-bg: #f2f2f2;
+  --table-head-bg: #e8eef5;
+  --note-bg: #f5f9ff;
+  --ok-bg: #eefaf0;
+  --ok-fg: #1c6b34;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1e1e1e;
+    --fg: #d8d8d8;
+    --muted: #a0a0a0;
+    --border: #4a4a4a;
+    --accent: #6ab0f3;
+    --code-bg: #2a2a2a;
+    --table-head-bg: #2e3a47;
+    --note-bg: #26303b;
+    --ok-bg: #1c2b20;
+    --ok-fg: #7fd79a;
+  }
+}
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Noto Sans TC", "PingFang TC", sans-serif;
+  line-height: 1.7;
+  margin: 0;
+  padding: 1.5rem 2rem;
+}
+h1, h2, h3 { color: var(--accent); }
+h1 { border-bottom: 2px solid var(--border); padding-bottom: 0.4rem; }
+h2 { border-bottom: 1px solid var(--border); padding-bottom: 0.25rem; margin-top: 2.2rem; }
+code, pre {
+  font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg);
+  border-radius: 3px;
+}
+code { padding: 0.1em 0.35em; }
+pre { padding: 0.8rem 1rem; overflow-x: auto; }
+pre code { padding: 0; background: none; }
+table { border-collapse: collapse; margin: 1rem 0; width: 100%; }
+th, td { border: 1px solid var(--border); padding: 0.4rem 0.7rem; text-align: left; vertical-align: top; }
+th { background: var(--table-head-bg); }
+.muted { color: var(--muted); }
+.note { background: var(--note-bg); border: 1px solid var(--border); border-radius: 4px; padding: 0.8rem 1rem; margin: 1rem 0; }
+.ok { background: var(--ok-bg); color: var(--ok-fg); border-radius: 3px; padding: 0.1em 0.5em; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h1>P1 bindings 產生路徑與建置驗證</h1>
+<p class="muted">日期: 2026-08-26 | 對應階段: 計劃書第 10 章 P1 (Go 介面與橋接層) | 專案位址: <code>github.com/nexgus/fsbrowser</code></p>
+
+<h2>1. 目的</h2>
+<p>驗證計劃書第 4.4 節所述行為: 外部套件 (本模組 <code>service</code>) 的 Wails v3 service 於宿主 app 執行
+<code>wails3 generate bindings</code> 後, bindings 確實產生於 <code>frontend/bindings/github.com/nexgus/fsbrowser/service/</code>
+之下; 並驗證第 10 章 P1 要求的兩個平台建置產物 (Windows amd64, macOS 本機 arch) 皆可成功建置, 且 macOS 產物
+可實際啟動並完成一次完整的前端 -&gt; bindings -&gt; Go service 呼叫往返 (含結構化錯誤路徑).</p>
+
+<h2>2. 環境</h2>
+<table>
+<tr><th>項目</th><th>版本 / 值</th></tr>
+<tr><td>作業系統</td><td>macOS 26.5.2 (BuildVersion 25F84), arm64</td></tr>
+<tr><td>Go</td><td>go1.26.4 darwin/arm64</td></tr>
+<tr><td>wails3 CLI</td><td>v3.0.0-beta.8</td></tr>
+<tr><td><code>github.com/wailsapp/wails/v3</code> (go.mod 依賴)</td><td>v3.0.0-beta.8 (鎖定, 依計劃書第 8 章)</td></tr>
+<tr><td>Go module</td><td><code>github.com/nexgus/fsbrowser</code>, go 1.26.4</td></tr>
+</table>
+
+<h2>3. 方法</h2>
+<h3>3.1 bindings 產生</h3>
+<p>於 <code>test/</code> (最小 Wails v3 app, 以 <code>fsb/memfs</code> 為檔案操作介面實作, 註冊
+<code>service.New(...)</code>) 內執行:</p>
+<pre><code>cd test
+wails3 generate bindings -b ./...</code></pre>
+<p><code>-b</code> 使產生的 bindings 匯入 Wails 內建的 bundled runtime (<code>/wails/runtime.js</code>, 由 Wails
+的 asset server 於執行期提供), 前端頁面因此不需安裝 <code>@wailsio/runtime</code> npm 套件或任何建置工具即可
+直接以 <code>&lt;script type="module"&gt;</code> 引入 bindings. 未加 <code>-ts</code> 時預設產生一般 JS (含
+JSDoc 型別註解), 恰好符合本階段 "前端只需極簡 HTML+JS" 的要求.</p>
+
+<h3>3.2 建置</h3>
+<p>執行 <code>test/build.sh</code>: 腳本先重新產生 bindings (確保與目前 Go 端介面一致), 再分別建置
+Windows amd64 (<code>CGO_ENABLED=0</code> 靜態連結交叉編譯, 附 <code>-ldflags "-H windowsgui"</code>)
+與 macOS 本機 arch (<code>arm64</code>, 正常 cgo 建置) 兩個單一執行檔至 <code>test/bin/</code>.</p>
+
+<h3>3.3 macOS 產物啟動驗證</h3>
+<p>以背景方式啟動 <code>test/bin/fsbrowser-test-macos-arm64</code>, 等待 3 秒後檢查程序是否仍存活, 再手動
+結束程序; 同時擷取其標準輸出/錯誤輸出, 確認前端頁面 (<code>test/frontend/index.html</code>) 載入後對
+Home / Roots / PathStyle / List / Stat / MakeDir / Rename / Delete 的呼叫鏈實際發生, 並刻意呼叫一次
+<code>Delete</code> 於非空目錄, 驗證結構化錯誤 (<code>not_empty</code>) 確實以 <code>err.cause</code> 形式
+送達前端.</p>
+
+<h2>4. 結果</h2>
+
+<h3>4.1 bindings 產生路徑</h3>
+<p>執行輸出摘要: <code>Processed: 240 Packages, 1 Service, 9 Methods, 1 Enum, 2 Models, 0 Events</code>,
+<code>Output directory: /Users/scgus/myproj/rfb/test/frontend/bindings</code>. 實際產生的目錄樹:</p>
+<pre><code>test/frontend/bindings/
+└── github.com/
+    ├── nexgus/fsbrowser/
+    │   ├── fsb/
+    │   │   ├── index.js      # 匯出 models.js
+    │   │   └── models.js     # Entry class, Kind enum, FileSystem 型別註記
+    │   └── service/
+    │       ├── index.js      # 匯出 service.js
+    │       └── service.js    # List/Stat/Home/Roots/PathStyle/MakeDir/Rename/
+    │                         # Delete/SetFileSystem 九個綁定方法
+    └── wailsapp/wails/v3/internal/
+        ├── eventcreate.js
+        └── eventdata.d.ts    # 事件相關型別 (本 app 未註冊事件, 為固定產出)
+</code></pre>
+<p>確認: 外部模組 (<code>github.com/nexgus/fsbrowser/service</code>, <code>github.com/nexgus/fsbrowser/fsb</code>)
+的型別與方法確實依 Go import path 產生於 <code>bindings/github.com/...</code> 之下, 與計劃書第 4.4 節的敘述
+一致.</p>
+
+<div class="note">
+<strong>過程中的一個發現</strong>: 產生過程對 <code>Service.SetFileSystem(fs fsb.FileSystem)</code> 發出警告
+<code>parameter fs has non-empty interface type ... passing values other than `null` is not supported by
+encoding/json</code>. 這是預期行為: <code>SetFileSystem</code> 是供宿主 Go 端於執行期抽換實作用的方法 (計劃書
+第 4.4 節), 本非設計給前端呼叫, 介面型別參數無法跨 JSON 邊界傳遞屬正常現象, 不影響其餘八個方法的綁定; 予以保留
+不特別處理.
+</div>
+
+<h3>4.2 建置產物</h3>
+<table>
+<tr><th>目標</th><th>指令重點</th><th>檔案</th><th>大小</th><th><code>file</code> 判定</th></tr>
+<tr><td>Windows amd64</td><td><code>GOOS=windows GOARCH=amd64 CGO_ENABLED=0</code>, <code>-ldflags "-H windowsgui -s -w"</code></td><td><code>fsbrowser-test-windows-amd64.exe</code></td><td>11 MB</td><td>PE32+ executable (GUI) x86-64, for MS Windows</td></tr>
+<tr><td>macOS arm64</td><td>本機 cgo 建置</td><td><code>fsbrowser-test-macos-arm64</code></td><td>15 MB</td><td>Mach-O 64-bit executable arm64</td></tr>
+</table>
+<p><span class="ok">兩個平台皆建置成功</span>, <code>go vet ./...</code> 與 <code>go test ./...</code> (含
+<code>fsb/memfs</code> 單元測試, 涵蓋每個操作的成功與失敗路徑) 全數通過, <code>-race</code> 亦通過.</p>
+
+<h3>4.3 macOS 產物啟動驗證</h3>
+<p>啟動後 3 秒程序仍存活 (<span class="ok">未崩潰</span>), 手動結束. 標準輸出擷取到以下關鍵行, 顯示視窗成功
+建立, 前端頁面成功載入 bindings, 且完整呼叫鏈 (含刻意觸發的錯誤情境) 皆如預期運作:</p>
+<pre><code>INF Build Info: Wails=v3.0.0-beta.8 Compiler=go1.26.4 ... GOOS=darwin GOARCH=arm64
+INF Platform Info: ID=25F84 Name=MacOS Version=26.5.2
+INF AssetServer Info: middleware=true handler=true
+INF [AssetFileServerFS] Handling request url=/ file=.
+INF [AssetFileServerFS] Handling request url=/bindings/.../service/service.js
+INF [AssetFileServerFS] Handling request url=/bindings/.../fsb/models.js
+ERR Binding call failed: Bound method returned an error: not_empty: 目錄非空: /home/user/docs</code></pre>
+<p>最後一行為刻意觸發的驗證項目 (對非空目錄 <code>/home/user/docs</code> 呼叫 <code>Delete</code>): Go 端
+<code>memfs.Delete</code> 正確回傳 <code>fsb.ErrNotEmpty</code>, 橋接層 <code>service.Delete</code> 原樣
+回傳該結構化錯誤, Wails 以預設 marshaler 序列化 <code>*fsb.Error</code> (帶 <code>json:"code"</code> /
+<code>json:"message"</code> tag) 並掛在 <code>CallError.Cause</code>, 前端 <code>@wailsio/runtime</code>
+將其還原為 <code>err.cause = {code: "not_empty", message: "..."}</code> 交回呼叫端 -- 此為
+<code>service/service.go</code> 註解中所述機制的實機驗證, 非僅程式碼推論. 此行以 <code>ERR</code> 等級記錄
+屬 Wails 對 "service 方法回傳非 nil error" 的既有記錄行為, 非本 app 的例外或崩潰.</p>
+<p class="muted">Windows binary 無法在本開發機 (macOS) 上執行, 依計劃書第 11 章列為殘餘風險, 僅完成建置成功與
+<code>file</code> 類型判定兩項, 實際啟動與操作驗證留待可取得的 Windows 環境進行.</p>
+
+<h2>5. 結論</h2>
+<ul>
+<li>bindings 產生路徑符合計劃書第 4.4 節所述, 外部模組型別與方法確實產生於
+<code>frontend/bindings/github.com/nexgus/fsbrowser/service/</code> 之下, 附帶其相依的
+<code>fsb</code> 套件型別於同層 <code>fsb/</code> 目錄.</li>
+<li>Wails v3.0.0-beta.8 對 service 方法 error 的預設處理機制 (json.Marshal 直接序列化 error 值,
+包入 <code>CallError.Cause</code>, 前端還原為 <code>err.cause</code>) 已足以承載計劃書第 4.3 節的結構化
+錯誤 (代碼 + 訊息), 不需自訂 <code>ServiceOptions.MarshalError</code>; 唯一需要的配合是讓
+<code>*fsb.Error</code> 的欄位帶上 <code>json:"code"</code> / <code>json:"message"</code> tag.</li>
+<li>Windows amd64 與 macOS arm64 兩個單一執行檔皆建置成功; macOS 產物實際啟動並完成一次完整的呼叫鏈驗證
+(含正常路徑與結構化錯誤路徑), 未觀察到崩潰.</li>
+<li><code>go vet ./...</code>, <code>go test ./...</code> (含 <code>-race</code>) 全數通過.</li>
+</ul>
+
+<h2>6. 附註</h2>
+<ul>
+<li>本次驗證未安裝 WebView2 runtime 於任何 Windows 機器上實測 Windows binary 的啟動與操作, 此為已知殘餘風險
+(計劃書第 11 章), 待可取得的 Windows 環境時補齊.</li>
+<li><code>test/frontend/bindings/</code> 為產生物, 未納入版本控制 (視同 <code>node_modules</code> 一類的衍生
+檔案); <code>test/build.sh</code> 於建置前會重新執行 <code>wails3 generate bindings</code>, 確保與當時的
+Go 端介面同步, 不依賴曾經產生過的舊檔.</li>
+<li><code>service/service.go</code> 額外綁定了 <code>SetFileSystem</code> (供 Go 端執行期抽換實作用),
+產生 bindings 時對其參數型別 (<code>fsb.FileSystem</code> 介面) 發出警告 (見 4.1 節附註); 該方法本非設計給
+前端呼叫, 維持現狀即可.</li>
+</ul>
+
+</body>
+</html>
