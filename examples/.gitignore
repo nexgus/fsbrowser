@@ -1,0 +1,4 @@
+/bin/
+/cmd/*/frontend/dist/
+/cmd/*/frontend/bindings/
+/cmd/*/frontend/node_modules/

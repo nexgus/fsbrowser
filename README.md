@@ -115,6 +115,43 @@ function Picker() {
 
 Selected paths are always absolute, `/`-separated (e.g. `C:/Users/gus/data` on a Windows-style file system); convert them yourself if a consumer insists on backslashes.
 
+## Examples
+
+[examples/cmd/](examples/cmd/) contains two runnable Wails v3 example apps -- `react` and `vue3` -- each starts on the local file system and can switch to an SSH remote from within the app, demonstrating how a host application swaps the underlying file system at runtime.
+
+### Prerequisites
+
+- Go
+- Node.js with npm
+- the `wails3` CLI:
+
+```bash
+go install github.com/wailsapp/wails/v3/cmd/wails3@latest
+```
+
+The build script looks for `wails3` on `PATH` first, then falls back to `GOBIN` (or `GOPATH/bin`), so installing it via `go install` is enough even without adjusting `PATH`.
+
+### Build
+
+```bash
+examples/build.sh
+```
+
+The script regenerates the Wails bindings, installs front-end dependencies on first run (`npm install` only when `node_modules` is missing), builds the front ends, and produces single-file executables in `examples/bin/` for both apps:
+
+- `<app>-windows-amd64.exe` -- Windows amd64, statically linked cross-build
+- `<app>-darwin-<arch>` -- macOS, native architecture, compatible with macOS 11 and later
+
+### Run
+
+On macOS, run the produced binary directly:
+
+```bash
+examples/bin/react-darwin-arm64
+```
+
+For Windows, copy the `.exe` to a Windows machine and run it there; the only system requirement is the WebView2 runtime, which ships with current Windows versions.
+
 ## Packages
 
 | Package | Contents |

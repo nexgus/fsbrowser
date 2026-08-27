@@ -41,6 +41,11 @@ func New(fs fsb.FileSystem) *Service {
 
 // SetFileSystem 於執行期抽換底層的檔案操作介面實作 (例如宿主重新連線後換一個新的實作
 // 物件). 呼叫後, Service 的下一次操作即使用新實作; 呼叫本身不影響正在進行中的操作.
+//
+// 本方法僅供 Go 端宿主呼叫, 介面參數無法經 JSON 跨越 bindings, 故以下列指示排除於
+// bindings 產生之外 (亦免除產生器對介面參數的警告).
+//
+//wails:ignore
 func (s *Service) SetFileSystem(fs fsb.FileSystem) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

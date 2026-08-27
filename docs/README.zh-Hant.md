@@ -115,6 +115,43 @@ function Picker() {
 
 選定結果一律是以 `/` 分隔的絕對路徑 (例如 Windows 風格檔案系統上的 `C:/Users/gus/data`); 下游若堅持要反斜線, 請自行轉換.
 
+## 範例
+
+[examples/cmd/](../examples/cmd/) 內含兩個可直接執行的 Wails v3 範例 app -- `react` 與 `vue3` -- 啟動時瀏覽本機檔案系統, 並可於 app 內切換至 SSH 遠端, 示範宿主 app 如何在執行期抽換底層檔案系統.
+
+### 前置需求
+
+- Go
+- Node.js 與 npm
+- `wails3` CLI:
+
+```bash
+go install github.com/wailsapp/wails/v3/cmd/wails3@latest
+```
+
+建置腳本會先在 `PATH` 中尋找 `wails3`, 找不到時退回 `GOBIN` (未設定時為 `GOPATH/bin`), 因此以 `go install` 安裝後即使未調整 `PATH` 也能使用.
+
+### 建置
+
+```bash
+examples/build.sh
+```
+
+腳本會重新產生 Wails bindings, 首次執行時安裝前端依賴 (僅在 `node_modules` 不存在時執行 `npm install`), 建置前端, 並在 `examples/bin/` 產出兩個 app 各自的單一執行檔:
+
+- `<app>-windows-amd64.exe` -- Windows amd64, 靜態連結交叉編譯
+- `<app>-darwin-<arch>` -- macOS 本機架構, 相容 macOS 11 以上
+
+### 執行
+
+macOS 上直接執行產出的執行檔:
+
+```bash
+examples/bin/react-darwin-arm64
+```
+
+Windows 版則將 `.exe` 複製到 Windows 機器上直接執行; 系統需求僅有 WebView2 runtime, 現行 Windows 版本皆已內建.
+
 ## 套件一覽
 
 | 套件 | 內容 |
