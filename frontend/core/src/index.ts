@@ -10,6 +10,8 @@ export {
   isFileLike,
   isSelectableAs,
   isSpecial,
+  matchesExtensions,
+  normalizeExtensions,
 } from "./types.js";
 
 export type { ErrorCode, FsbError, FsbOperation } from "./errors.js";
@@ -62,6 +64,8 @@ export type {
   BrowserStoreOptions,
   DeleteConfirmState,
   NewFolderState,
+  OverwriteConfirmState,
   RenameState,
+  SaveNameIssue,
 } from "./store.js";
 export { createBrowserStore } from "./store.js";

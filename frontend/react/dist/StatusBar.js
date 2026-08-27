@@ -5,6 +5,10 @@ import { formatErrorText, toDisplayPath, } from "@nexgus/fsb-core";
 import { IconClose, IconSpinner, IconWarning } from "./icons.js";
 export function StatusBar(props) {
     const { snapshot, pathStyle, t } = props;
+    // 覆寫確認: 優先度最高 (僅存檔模式可能出現), 取代平時的中性 / Save 動作區.
+    if (snapshot.overwriteConfirm !== null) {
+        return (_jsxs("div", { className: "fsb-statusbar", children: [_jsx("span", { className: "fsb-status-text", children: t("save.overwriteConfirm", { name: snapshot.overwriteConfirm.name }) }), _jsxs("div", { className: "fsb-status-actions", children: [_jsx("button", { type: "button", className: "fsb-action-btn", onClick: props.onCancelOverwrite, children: t("button.cancel") }), _jsx("button", { type: "button", className: "fsb-action-btn fsb-danger", onClick: props.onConfirmOverwrite, children: t("button.overwrite") })] })] }));
+    }
     // 刪除確認: 優先度最高, 取代平時的中性 / Select 動作區.
     if (snapshot.deleteConfirm !== null) {
         const count = snapshot.deleteConfirm.paths.length;
@@ -17,7 +21,7 @@ export function StatusBar(props) {
         return (_jsxs("div", { className: "fsb-statusbar fsb-error", children: [_jsxs("span", { className: "fsb-status-text", children: [_jsx(IconWarning, { size: 14 }), formatErrorText(t, snapshot.error)] }), _jsx("div", { className: "fsb-status-actions", children: _jsx("button", { type: "button", className: "fsb-status-dismiss", "aria-label": t("button.dismissError"), onClick: props.onDismissError, children: _jsx(IconClose, { size: 14 }) }) })] }));
     }
     const neutralText = statusNeutralText(snapshot, pathStyle, t);
-    return (_jsxs("div", { className: "fsb-statusbar", children: [_jsxs("span", { className: "fsb-status-text", children: [snapshot.loading ? _jsx(IconSpinner, { size: 14 }) : null, neutralText] }), _jsxs("div", { className: "fsb-status-actions", children: [_jsx("button", { type: "button", className: "fsb-action-btn", onClick: props.onCancelPanel, children: t("button.cancel") }), _jsx("button", { type: "button", className: "fsb-action-btn fsb-primary", disabled: !snapshot.canConfirmSelection, onClick: props.onConfirmSelection, children: t("button.select") })] })] }));
+    return (_jsxs("div", { className: "fsb-statusbar", children: [_jsxs("span", { className: "fsb-status-text", children: [snapshot.loading ? _jsx(IconSpinner, { size: 14 }) : null, neutralText] }), _jsxs("div", { className: "fsb-status-actions", children: [_jsx("button", { type: "button", className: "fsb-action-btn", onClick: props.onCancelPanel, children: t("button.cancel") }), _jsx("button", { type: "button", className: "fsb-action-btn fsb-primary", disabled: !snapshot.canConfirmSelection, onClick: props.onConfirmSelection, children: props.selectionMode === "save" ? t("button.save") : t("button.select") })] })] }));
 }
 /** statusNeutralText 依進行中的重新命名 / 建立目錄 / 載入或選取狀態組出中性狀態文字. */
 function statusNeutralText(snapshot, pathStyle, t) {

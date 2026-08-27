@@ -33,7 +33,14 @@ export function useBrowserStore(options: BrowserStoreOptions): UseBrowserStoreRe
     };
     return createBrowserStore(stable);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [options.client, options.selectionMode, options.returnMode, options.initialDir]);
+  }, [
+    options.client,
+    options.selectionMode,
+    options.returnMode,
+    options.initialDir,
+    options.defaultName,
+    options.extensions,
+  ]);
 
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   return { store, snapshot };

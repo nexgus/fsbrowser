@@ -5,7 +5,7 @@ import { effectiveKind, formatDateTime, formatSize, toDisplayPath, } from "@nexg
 import { EntryIcon } from "./EntryIcon.js";
 /** Row 渲染單一項目; editing 為真時該列轉為列內重新命名編輯狀態. */
 export function Row(props) {
-    const { entry, selected, pathStyle, sizeUnit, t, editing } = props;
+    const { entry, selected, dimmed, pathStyle, sizeUnit, t, editing } = props;
     const inputRef = useRef(null);
     useEffect(() => {
         if (editing) {
@@ -17,6 +17,7 @@ export function Row(props) {
         "fsb-row",
         selected ? "fsb-selected" : "",
         entry.Hidden ? "fsb-dim" : "",
+        dimmed ? "fsb-row-unselectable" : "",
     ]
         .filter(Boolean)
         .join(" ");

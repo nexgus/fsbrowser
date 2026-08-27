@@ -38,8 +38,11 @@ export interface Entry {
 /** PathStyle 是實作回報的路徑風格, 僅影響顯示層 (第 4.2 節). */
 export type PathStyle = "posix" | "windows";
 
-/** 選取模式: 元件要使用者挑的是檔案還是目錄 (開啟參數). */
-export type SelectionMode = "file" | "dir";
+/**
+ * 選取模式: 元件要使用者挑的是檔案, 目錄, 還是要指定存檔位置 (開啟參數).
+ * "save" 為存檔模式: 瀏覽語意與 "file" 相同, 另有檔名輸入列.
+ */
+export type SelectionMode = "file" | "dir" | "save";
 
 /** 回傳模式: 選定結果為單一路徑或路徑陣列 (開啟參數). */
 export type ReturnMode = "single" | "multiple";
@@ -75,9 +78,38 @@ export function isFileLike(entry: Entry): boolean {
 
 /**
  * isSelectableAs 判斷項目能否作為選定結果: 特殊檔案與失效連結一律不可 (可刪除與重新
- * 命名, 但不可選取, 第 4.1 節); 其餘依選取模式判定.
+ * 命名, 但不可選取, 第 4.1 節); 其餘依選取模式判定. 存檔模式的可選判準與檔案模式相同.
  */
 export function isSelectableAs(entry: Entry, mode: SelectionMode): boolean {
   if (isBrokenLink(entry) || isSpecial(entry)) return false;
   return mode === "dir" ? isDirectoryLike(entry) : isFileLike(entry);
+}
+
+/**
+ * normalizeExtensions 把開啟參數給的副檔名清單正規化為比對用的形式: 逐項去除前後空白,
+ * 去除開頭的 "*." 或 "." 字首, 轉為小寫, 並濾除空字串與重複項. 未提供時回傳空清單,
+ * 表示不做過濾.
+ */
+export function normalizeExtensions(exts?: readonly string[]): readonly string[] {
+  if (exts === undefined) return Object.freeze([]);
+  const seen: string[] = [];
+  for (const raw of exts) {
+    let ext = raw.trim();
+    if (ext.startsWith("*.")) ext = ext.slice(2);
+    else if (ext.startsWith(".")) ext = ext.slice(1);
+    ext = ext.trim().toLowerCase();
+    if (ext === "" || seen.includes(ext)) continue;
+    seen.push(ext);
+  }
+  return Object.freeze(seen);
+}
+
+/**
+ * matchesExtensions 判斷名稱是否符合副檔名過濾: 清單為空時一律符合 (不過濾); 否則
+ * 不分大小寫比對名稱是否以 "." 加上其中一個副檔名結尾.
+ */
+export function matchesExtensions(name: string, exts: readonly string[]): boolean {
+  if (exts.length === 0) return true;
+  const lower = name.toLowerCase();
+  return exts.some((ext) => lower.endsWith(`.${ext}`));
 }

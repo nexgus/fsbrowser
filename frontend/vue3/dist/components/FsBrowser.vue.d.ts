@@ -15,6 +15,10 @@ type __VLS_Props = {
     returnMode?: ReturnMode;
     /** 起始目錄; 未提供時用 client 的家目錄. */
     initialDir?: string;
+    /** 存檔模式的預設檔名, 面板開啟時預填; 未提供時為空字串. */
+    defaultName?: string;
+    /** 副檔名過濾清單; 僅於檔案與存檔模式生效. */
+    extensions?: string[];
 };
 declare const _default: import("vue").DefineComponent<__VLS_Props, {}, {}, {}, {}, import("vue").ComponentOptionsMixin, import("vue").ComponentOptionsMixin, {
     select: (result: string | string[]) => any;
@@ -32,6 +36,8 @@ declare const _default: import("vue").DefineComponent<__VLS_Props, {}, {}, {}, {
     selectionMode: SelectionMode;
     returnMode: ReturnMode;
     initialDir: string;
+    defaultName: string;
+    extensions: string[];
 }, {}, {}, {}, string, import("vue").ComponentProvideOptions, false, {}, any>;
 export default _default;
 //# sourceMappingURL=FsBrowser.vue.d.ts.map

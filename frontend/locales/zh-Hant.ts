@@ -17,6 +17,7 @@ export const zhHant: LocalePack = {
   "title": "瀏覽檔案",
   "mode.file": "請選擇檔案",
   "mode.dir": "請選擇目錄",
+  "mode.save": "儲存檔案",
 
   // 工具列
   "toolbar.up": "上層目錄",
@@ -50,6 +51,12 @@ export const zhHant: LocalePack = {
   "edit.hint": "Enter 確認 · Esc 取消",
   "newFolder.defaultName": "未命名資料夾",
 
+  // 存檔模式
+  "save.namePlaceholder": "檔案名稱",
+  "save.overwriteConfirm": "\"{name}\" 已存在, 確定覆寫?",
+  "save.invalidName": "檔案名稱含有不可使用的字元.",
+  "save.isDirectory": "\"{name}\" 是既有的目錄, 請改用其他名稱.",
+
   // 右鍵選單
   "menu.rename": "重新命名",
   "menu.delete": "刪除",
@@ -62,6 +69,8 @@ export const zhHant: LocalePack = {
   // 按鈕
   "button.cancel": "取消",
   "button.select": "確定",
+  "button.save": "儲存",
+  "button.overwrite": "覆寫",
   "button.delete": "刪除",
   "button.dismissError": "關閉",
 

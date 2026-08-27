@@ -9,7 +9,14 @@ import type { FsbError, FsbOperation } from "./errors.js";
 import { toFsbError } from "./errors.js";
 import { baseName, joinPath, normalizePath, parentDir, rootOf } from "./path.js";
 import type { Entry, PathStyle, ReturnMode, SelectionMode } from "./types.js";
-import { effectiveKind, isDirectoryLike, isSelectableAs } from "./types.js";
+import {
+  effectiveKind,
+  isDirectoryLike,
+  isFileLike,
+  isSelectableAs,
+  matchesExtensions,
+  normalizeExtensions,
+} from "./types.js";
 
 /** RenameState 是進行中的重新命名 (列內編輯). */
 export interface RenameState {
@@ -31,6 +38,20 @@ export interface NewFolderState {
 export interface DeleteConfirmState {
   /** 待刪除的路徑集合 (觸發確認當下的選取集). */
   paths: readonly string[];
+}
+
+/**
+ * SaveNameIssue 是存檔模式檔名輸入列目前的問題:
+ * "empty" 為空字串, "invalid" 為含不合法字元, "isDirectory" 為目標已是既有目錄.
+ */
+export type SaveNameIssue = "empty" | "invalid" | "isDirectory";
+
+/** OverwriteConfirmState 是存檔模式進行中的覆寫確認. */
+export interface OverwriteConfirmState {
+  /** 待覆寫的目標路徑, 內部形式. */
+  path: string;
+  /** 待覆寫的目標名稱, 供確認文字顯示. */
+  name: string;
 }
 
 /** BrowserSnapshot 是 store 對外的唯讀狀態快照. */
@@ -65,6 +86,12 @@ export interface BrowserSnapshot {
   newFolder: NewFolderState | null;
   /** 進行中的刪除確認. */
   deleteConfirm: DeleteConfirmState | null;
+  /** 存檔模式檔名輸入列的目前內容; 其餘模式恆為空字串. */
+  saveName: string;
+  /** 存檔模式檔名目前的問題; 無問題時為 null. */
+  saveNameIssue: SaveNameIssue | null;
+  /** 存檔模式進行中的覆寫確認. */
+  overwriteConfirm: OverwriteConfirmState | null;
   /** 可見項目數. */
   itemCount: number;
   /** 選取項目數. */
@@ -87,6 +114,13 @@ export interface BrowserStoreOptions {
   initialDir?: string;
   /** 是否一開始就顯示隱藏項目; 預設否. */
   showHidden?: boolean;
+  /** 存檔模式的預設檔名, 面板開啟時預填; 未提供時為空字串. */
+  defaultName?: string;
+  /**
+   * 副檔名過濾清單 (例如 ["txt", ".md", "*.log"], 經 normalizeExtensions 正規化後使用).
+   * 僅於檔案與存檔模式生效; 未提供或為空清單時不做過濾.
+   */
+  extensions?: readonly string[];
   /** 選定結果回呼: 單選為一個路徑, 多選為路徑陣列 (皆為內部形式). */
   onSelect?: (result: string | string[]) => void;
   /** 取消回呼. */
@@ -156,6 +190,13 @@ export interface BrowserStore {
   /** 取消刪除確認. */
   cancelDelete(): void;
 
+  /** 設定存檔模式的檔名輸入列內容. */
+  setSaveName(name: string): void;
+  /** 確認覆寫: 發出選定結果並清除覆寫確認. */
+  confirmOverwrite(): Promise<void> | void;
+  /** 取消覆寫確認. */
+  cancelOverwrite(): void;
+
   /** 關閉目前錯誤. */
   dismissError(): void;
 
@@ -169,6 +210,12 @@ export interface BrowserStore {
 
   /** 取得目前可見項目中指定路徑的項目. */
   findEntry(path: string): Entry | undefined;
+
+  /**
+   * 判斷項目是否因副檔名過濾而淡化 (顯示但不可選); 目錄模式與未設過濾時一律為 false,
+   * 目錄 (含連結到目錄者) 亦不受過濾影響.
+   */
+  isEntryDimmed(entry: Entry): boolean;
 }
 
 /** compareEntries 是列表排序: 目錄優先, 其次以名稱不分大小寫升冪. */
@@ -195,6 +242,47 @@ interface InternalState {
   rename: RenameState | null;
   newFolder: NewFolderState | null;
   deleteConfirm: DeleteConfirmState | null;
+  saveName: string;
+  /** 目標為既有目錄的旗標; 只在確認時設立, 檔名再變更或導覽後清除. */
+  saveIsDirectory: boolean;
+  overwriteConfirm: OverwriteConfirmState | null;
+}
+
+/** WINDOWS_RESERVED_CHARS 是 Windows 風格下檔名不可含的保留字元. */
+const WINDOWS_RESERVED_CHARS = '<>:"|?*';
+
+/**
+ * hasWindowsReservedChar 判斷名稱是否含 Windows 風格下不可用的字元: 保留字元或控制
+ * 字元 (含 DEL).
+ */
+function hasWindowsReservedChar(name: string): boolean {
+  for (const ch of name) {
+    if (WINDOWS_RESERVED_CHARS.includes(ch)) return true;
+    const code = ch.codePointAt(0) ?? 0;
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
+
+/**
+ * validateSaveName 檢查存檔模式的檔名: 空字串為 "empty"; 含分隔符, 為 "." 或 "..",
+ * 或 Windows 風格下含保留字元者為 "invalid"; 其餘為 null.
+ */
+function validateSaveName(name: string, pathStyle: PathStyle): SaveNameIssue | null {
+  const trimmed = name.trim();
+  if (trimmed === "") return "empty";
+  if (trimmed === "." || trimmed === "..") return "invalid";
+  if (trimmed.includes("/") || trimmed.includes("\\")) return "invalid";
+  if (pathStyle === "windows" && hasWindowsReservedChar(trimmed)) return "invalid";
+  return null;
+}
+
+/**
+ * hasExtension 判斷檔名是否已帶副檔名: 第一個字元之後含 "." 才算, 故 ".bashrc" 這類
+ * 以點開頭的名稱視為無副檔名.
+ */
+function hasExtension(name: string): boolean {
+  return name.indexOf(".", 1) >= 0;
 }
 
 /**
@@ -222,11 +310,24 @@ export function createBrowserStore(options: BrowserStoreOptions): BrowserStore {
     rename: null,
     newFolder: null,
     deleteConfirm: null,
+    saveName: options.defaultName ?? "",
+    saveIsDirectory: false,
+    overwriteConfirm: null,
   };
+
+  // 副檔名過濾只在檔案與存檔模式生效; 目錄模式完全忽略.
+  const extensions = selectionMode === "dir" ? [] : normalizeExtensions(options.extensions);
 
   const listeners = new Set<() => void>();
   let snapshot: BrowserSnapshot = buildSnapshot();
   let initialized = false;
+
+  /** isDimmed 判斷項目是否因副檔名過濾而淡化: 目錄不受過濾影響. */
+  function isDimmed(entry: Entry): boolean {
+    if (extensions.length === 0) return false;
+    if (isDirectoryLike(entry)) return false;
+    return !matchesExtensions(entry.Name, extensions);
+  }
 
   function visibleEntries(): Entry[] {
     const filtered = state.showHidden
@@ -245,9 +346,18 @@ export function createBrowserStore(options: BrowserStoreOptions): BrowserStore {
       .map((path) => entries[order.get(path) as number])
       .filter((entry): entry is Entry => entry !== undefined);
     const allSelectable =
-      selected.length > 0 && selected.every((entry) => isSelectableAs(entry, selectionMode));
+      selected.length > 0 &&
+      selected.every((entry) => isSelectableAs(entry, selectionMode) && !isDimmed(entry));
     const countOk = returnMode === "single" ? selection.length === 1 : selection.length >= 1;
     const busy = state.loading || state.deleting || state.rename !== null || state.newFolder !== null;
+    const saveNameIssue =
+      selectionMode === "save"
+        ? (validateSaveName(state.saveName, state.pathStyle) ??
+          (state.saveIsDirectory ? "isDirectory" : null))
+        : null;
+    // 存檔模式的確認只看檔名是否可用: 不看選取集, 回傳模式無意義, 固定單一路徑.
+    const canConfirm =
+      selectionMode === "save" ? saveNameIssue === null && !busy : allSelectable && countOk && !busy;
 
     return Object.freeze({
       currentDir: state.currentDir,
@@ -268,9 +378,13 @@ export function createBrowserStore(options: BrowserStoreOptions): BrowserStore {
         state.deleteConfirm === null
           ? null
           : Object.freeze({ paths: Object.freeze(state.deleteConfirm.paths.slice()) }),
+      saveName: selectionMode === "save" ? state.saveName : "",
+      saveNameIssue,
+      overwriteConfirm:
+        state.overwriteConfirm === null ? null : Object.freeze({ ...state.overwriteConfirm }),
       itemCount: entries.length,
       selectedCount: selection.length,
-      canConfirmSelection: allSelectable && countOk && !busy,
+      canConfirmSelection: canConfirm,
       atRoot: state.currentDir !== "" && state.currentDir === rootOf(state.currentDir),
     });
   }
@@ -315,6 +429,9 @@ export function createBrowserStore(options: BrowserStoreOptions): BrowserStore {
     state.rename = null;
     state.newFolder = null;
     state.deleteConfirm = null;
+    // 導覽時清除覆寫確認與 "目標為目錄" 的提示; 檔名本身保留不清空.
+    state.overwriteConfirm = null;
+    state.saveIsDirectory = false;
     emit();
 
     const result = await run("list", dir, () => options.client.list(dir));
@@ -338,6 +455,24 @@ export function createBrowserStore(options: BrowserStoreOptions): BrowserStore {
 
   function entriesInView(): Entry[] {
     return snapshot.entries as Entry[];
+  }
+
+  /** isDimmedPath 判斷可見項目中的指定路徑是否為淡化項目; 不在列表中者視為非淡化. */
+  function isDimmedPath(path: string): boolean {
+    const entry = entriesInView().find((item) => item.Path === path);
+    return entry !== undefined && isDimmed(entry);
+  }
+
+  /**
+   * applySaveName 設定檔名輸入列內容, 並清除因舊檔名而生的 "目標為目錄" 提示與覆寫確認
+   * (兩者皆繫於當時的檔名, 檔名一改即失效).
+   */
+  function applySaveName(name: string): void {
+    if (state.saveName === name && !state.saveIsDirectory && state.overwriteConfirm === null) return;
+    state.saveName = name;
+    state.saveIsDirectory = false;
+    state.overwriteConfirm = null;
+    emit();
   }
 
   function setSelection(paths: string[], anchor: string | null): void {
@@ -436,10 +571,17 @@ export function createBrowserStore(options: BrowserStoreOptions): BrowserStore {
     },
 
     selectOnly(path) {
+      // 淡化項目不可選, 點選一律無動作 (亦不改動既有選取).
+      if (isDimmedPath(path)) return;
       setSelection([path], path);
+      if (selectionMode !== "save") return;
+      // 存檔模式點到檔案時把檔名帶入輸入列; 目錄與其他種類不影響.
+      const entry = entriesInView().find((item) => item.Path === path);
+      if (entry !== undefined && isFileLike(entry)) applySaveName(entry.Name);
     },
 
     toggleSelection(path) {
+      if (isDimmedPath(path)) return;
       if (returnMode === "single") {
         // 單選模式下 Ctrl / Cmd 點選僅在同一項時取消選取, 不累積多項.
         setSelection(state.selection.includes(path) ? [] : [path], path);
@@ -452,6 +594,7 @@ export function createBrowserStore(options: BrowserStoreOptions): BrowserStore {
     },
 
     selectRange(path) {
+      if (isDimmedPath(path)) return;
       if (returnMode === "single") {
         setSelection([path], path);
         return;
@@ -467,7 +610,11 @@ export function createBrowserStore(options: BrowserStoreOptions): BrowserStore {
       }
       const from = Math.min(anchorIndex, targetIndex);
       const to = Math.max(anchorIndex, targetIndex);
-      const range = entries.slice(from, to + 1).map((entry) => entry.Path);
+      // 範圍內的淡化項目自動跳過, 不納入選取.
+      const range = entries
+        .slice(from, to + 1)
+        .filter((entry) => !isDimmed(entry))
+        .map((entry) => entry.Path);
       // 錨點保持不變, 使連續的 Shift 點選皆以同一起點計算範圍.
       setSelection(range, state.anchor);
     },
@@ -483,6 +630,7 @@ export function createBrowserStore(options: BrowserStoreOptions): BrowserStore {
       if (entry === undefined) return;
       state.newFolder = null;
       state.deleteConfirm = null;
+      state.overwriteConfirm = null;
       state.rename = { path: entry.Path, originalName: entry.Name, draft: entry.Name };
       emit();
     },
@@ -523,6 +671,7 @@ export function createBrowserStore(options: BrowserStoreOptions): BrowserStore {
     beginNewFolder() {
       state.rename = null;
       state.deleteConfirm = null;
+      state.overwriteConfirm = null;
       state.newFolder = { draft: "" };
       emit();
     },
@@ -559,6 +708,7 @@ export function createBrowserStore(options: BrowserStoreOptions): BrowserStore {
       if (state.selection.length === 0) return;
       state.rename = null;
       state.newFolder = null;
+      state.overwriteConfirm = null;
       state.deleteConfirm = { paths: state.selection.slice() };
       emit();
     },
@@ -613,6 +763,24 @@ export function createBrowserStore(options: BrowserStoreOptions): BrowserStore {
       emit();
     },
 
+    setSaveName(name) {
+      applySaveName(name);
+    },
+
+    confirmOverwrite() {
+      const confirm = state.overwriteConfirm;
+      if (confirm === null) return;
+      state.overwriteConfirm = null;
+      emit();
+      options.onSelect?.(confirm.path);
+    },
+
+    cancelOverwrite() {
+      if (state.overwriteConfirm === null) return;
+      state.overwriteConfirm = null;
+      emit();
+    },
+
     dismissError() {
       if (state.error === null) return;
       state.error = null;
@@ -621,6 +789,28 @@ export function createBrowserStore(options: BrowserStoreOptions): BrowserStore {
 
     confirmSelection() {
       if (!snapshot.canConfirmSelection) return;
+
+      if (selectionMode === "save") {
+        let name = state.saveName.trim();
+        // 未帶副檔名時補上清單中的第一個副檔名; 已帶者原樣保留.
+        if (extensions.length > 0 && !hasExtension(name)) name = `${name}.${extensions[0] as string}`;
+        const target = joinPath(state.currentDir, name);
+        // 以完整清單 (含隱藏項目) 判定目標是否已存在.
+        const existing = state.allEntries.find((entry) => entry.Name === name);
+        if (existing !== undefined && effectiveKind(existing) === "dir") {
+          state.saveIsDirectory = true;
+          emit();
+          return;
+        }
+        if (existing !== undefined) {
+          state.overwriteConfirm = { path: target, name };
+          emit();
+          return;
+        }
+        options.onSelect?.(target);
+        return;
+      }
+
       const paths = snapshot.selection.slice();
       if (returnMode === "single") options.onSelect?.(paths[0] as string);
       else options.onSelect?.(paths);
@@ -636,6 +826,10 @@ export function createBrowserStore(options: BrowserStoreOptions): BrowserStore {
 
     findEntry(path) {
       return entriesInView().find((entry) => entry.Path === path);
+    },
+
+    isEntryDimmed(entry) {
+      return isDimmed(entry);
     },
   };
 }

@@ -154,6 +154,8 @@ export const FSB_STYLE_CSS = `
 }
 .fsb-row.fsb-dim { opacity: 0.45; }
 .fsb-row.fsb-broken { opacity: 0.55; }
+.fsb-row.fsb-row-unselectable { opacity: 0.45; cursor: default; }
+.fsb-row.fsb-row-unselectable:hover { background: none; }
 
 .fsb-row-icon {
   width: 16px;
@@ -268,6 +270,34 @@ export const FSB_STYLE_CSS = `
 .fsb-menu-item.fsb-danger { color: var(--fsb-error-text); background: var(--fsb-error-bg); }
 .fsb-menu-item.fsb-danger:hover { background: var(--fsb-error-bg); }
 .fsb-menu-sep { height: 1px; margin: 4px 2px; background: var(--fsb-section-border); }
+
+.fsb-savename {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-top: 1px solid var(--fsb-section-border);
+  background: var(--fsb-subtle-bg);
+}
+.fsb-savename-input {
+  height: var(--fsb-control-height);
+  border: 1px solid var(--fsb-panel-border);
+  border-radius: var(--fsb-radius);
+  background: var(--fsb-panel-bg);
+  color: var(--fsb-text-primary);
+  font-size: var(--fsb-font-size-row);
+  padding: 0 8px;
+}
+.fsb-savename-input:focus {
+  outline: none;
+  border-color: var(--fsb-accent);
+  box-shadow: 0 0 0 3px var(--fsb-selected-row-bg);
+}
+.fsb-savename-issue {
+  font-size: var(--fsb-font-size-label);
+  color: var(--fsb-error-text);
+}
 
 .fsb-statusbar {
   display: flex;

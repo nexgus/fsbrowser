@@ -17,6 +17,17 @@ const themeName = ref<ThemeName>("light");
 const sizeUnit = ref<SizeUnitSystem>("si");
 const selectionMode = ref<SelectionMode>("file");
 const returnMode = ref<ReturnMode>("single");
+const defaultName = ref("");
+const extensionFilter = ref("");
+
+// extensions: 以分號切割宿主端輸入的 glob 字串, 逐項去除前後空白並濾除空字串後轉為陣列;
+// 全空時傳 undefined, 交由元件套用預設行為.
+const extensions = computed<string[]>(() =>
+  extensionFilter.value
+    .split(";")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0),
+);
 
 // ---- 檔案系統區 --------------------------------------------------------------
 
@@ -182,7 +193,16 @@ function describeError(err: unknown): string {
         <select v-model="selectionMode">
           <option value="file">file</option>
           <option value="dir">dir</option>
+          <option value="save">save</option>
         </select>
+      </label>
+      <label>
+        Default name:
+        <input type="text" v-model="defaultName" />
+      </label>
+      <label>
+        Extension filter:
+        <input type="text" v-model="extensionFilter" placeholder="*.yaml;*.yml" />
       </label>
       <label>
         Return mode:
@@ -274,6 +294,8 @@ function describeError(err: unknown): string {
           :size-unit="sizeUnit"
           :selection-mode="selectionMode"
           :return-mode="returnMode"
+          :default-name="defaultName || undefined"
+          :extensions="extensions.length > 0 ? extensions : undefined"
           :initial-dir="initialDir || undefined"
           @select="onSelect"
           @cancel="onCancel"

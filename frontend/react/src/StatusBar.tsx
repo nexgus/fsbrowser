@@ -6,6 +6,7 @@ import {
   toDisplayPath,
   type BrowserSnapshot,
   type PathStyle,
+  type SelectionMode,
   type Translate,
 } from "@nexgus/fsb-core";
 import { IconClose, IconSpinner, IconWarning } from "./icons.js";
@@ -13,6 +14,7 @@ import { IconClose, IconSpinner, IconWarning } from "./icons.js";
 export interface StatusBarProps {
   snapshot: BrowserSnapshot;
   pathStyle: PathStyle;
+  selectionMode: SelectionMode;
   t: Translate;
   /** 觸發刪除確認當下的項目數, 供 "正在刪除中" 文字使用 (刪除確認關閉後 snapshot 已無法得知該數字). */
   deletingCount: number;
@@ -21,10 +23,29 @@ export interface StatusBarProps {
   onConfirmSelection: () => void;
   onConfirmDelete: () => void;
   onCancelDelete: () => void;
+  onConfirmOverwrite: () => void;
+  onCancelOverwrite: () => void;
 }
 
 export function StatusBar(props: StatusBarProps) {
   const { snapshot, pathStyle, t } = props;
+
+  // 覆寫確認: 優先度最高 (僅存檔模式可能出現), 取代平時的中性 / Save 動作區.
+  if (snapshot.overwriteConfirm !== null) {
+    return (
+      <div className="fsb-statusbar">
+        <span className="fsb-status-text">{t("save.overwriteConfirm", { name: snapshot.overwriteConfirm.name })}</span>
+        <div className="fsb-status-actions">
+          <button type="button" className="fsb-action-btn" onClick={props.onCancelOverwrite}>
+            {t("button.cancel")}
+          </button>
+          <button type="button" className="fsb-action-btn fsb-danger" onClick={props.onConfirmOverwrite}>
+            {t("button.overwrite")}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // 刪除確認: 優先度最高, 取代平時的中性 / Select 動作區.
   if (snapshot.deleteConfirm !== null) {
@@ -94,7 +115,7 @@ export function StatusBar(props: StatusBarProps) {
           disabled={!snapshot.canConfirmSelection}
           onClick={props.onConfirmSelection}
         >
-          {t("button.select")}
+          {props.selectionMode === "save" ? t("button.save") : t("button.select")}
         </button>
       </div>
     </div>

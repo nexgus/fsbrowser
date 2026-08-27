@@ -39,6 +39,10 @@ const props = withDefaults(
     returnMode?: ReturnMode;
     /** 起始目錄; 未提供時用 client 的家目錄. */
     initialDir?: string;
+    /** 存檔模式的預設檔名, 面板開啟時預填; 未提供時為空字串. */
+    defaultName?: string;
+    /** 副檔名過濾清單; 僅於檔案與存檔模式生效. */
+    extensions?: string[];
   }>(),
   {
     client: undefined,
@@ -48,6 +52,8 @@ const props = withDefaults(
     selectionMode: "file",
     returnMode: "single",
     initialDir: undefined,
+    defaultName: undefined,
+    extensions: undefined,
   },
 );
 
@@ -76,6 +82,8 @@ const { store, snapshot } = useBrowserStore({
   selectionMode: props.selectionMode,
   returnMode: props.returnMode,
   initialDir: props.initialDir,
+  defaultName: props.defaultName,
+  extensions: props.extensions,
   onSelect: (result) => emit("select", result),
   onCancel: () => emit("cancel"),
   onError: (error) => emit("error", error),
@@ -85,7 +93,11 @@ onMounted(() => {
   void store.init();
 });
 
-const modeHint = computed(() => (props.selectionMode === "dir" ? t("mode.dir") : t("mode.file")));
+const modeHint = computed(() => {
+  if (props.selectionMode === "dir") return t("mode.dir");
+  if (props.selectionMode === "save") return t("mode.save");
+  return t("mode.file");
+});
 
 // ---- 路徑列 --------------------------------------------------------------
 
@@ -249,11 +261,20 @@ function rowSelectable(entry: Entry): boolean {
   return isSelectableAs(entry, props.selectionMode);
 }
 
+// ---- 存檔模式檔名輸入列 --------------------------------------------------------------
+
+function onSaveNameKeydown(e: KeyboardEvent): void {
+  if (e.key === "Enter") store.confirmSelection();
+}
+
+const confirmLabel = computed(() => (props.selectionMode === "save" ? t("button.save") : t("button.select")));
+
 // ---- 狀態列文字 --------------------------------------------------------------
 
 const statusText = computed<string>(() => {
   const snap = snapshot.value;
   if (snap.error !== null) return formatErrorText(t, snap.error);
+  if (snap.overwriteConfirm !== null) return t("save.overwriteConfirm", { name: snap.overwriteConfirm.name });
   if (snap.deleteConfirm !== null) return t("status.deleteConfirm", { count: snap.deleteConfirm.paths.length });
   if (snap.deleting) return t("status.deleting", { count: snap.selectedCount });
   if (snap.rename !== null) return t("status.renaming", { name: snap.rename.draft || snap.rename.originalName });
@@ -266,7 +287,7 @@ const statusText = computed<string>(() => {
 
 const statusVariant = computed<"neutral" | "error" | "confirm">(() => {
   if (snapshot.value.error !== null) return "error";
-  if (snapshot.value.deleteConfirm !== null) return "confirm";
+  if (snapshot.value.overwriteConfirm !== null || snapshot.value.deleteConfirm !== null) return "confirm";
   return "neutral";
 });
 </script>
@@ -401,6 +422,7 @@ const statusVariant = computed<"neutral" | "error" | "confirm">(() => {
             'fsb-row-selected': snapshot.selection.includes(entry.Path),
             'fsb-row-hidden-item': entry.Hidden,
             'fsb-row-disabled': !rowSelectable(entry) && !isDirectoryLike(entry),
+            'fsb-row-dimmed': store.isEntryDimmed(entry),
           }"
           @click="onRowClick($event, entry)"
           @dblclick="onRowDblClick(entry)"
@@ -431,6 +453,22 @@ const statusVariant = computed<"neutral" | "error" | "confirm">(() => {
           </template>
         </div>
       </template>
+    </div>
+
+    <!-- 存檔模式檔名輸入列 -->
+    <div v-if="props.selectionMode === 'save'" class="fsb-save-row">
+      <input
+        class="fsb-save-input"
+        type="text"
+        :value="snapshot.saveName"
+        :placeholder="t('save.namePlaceholder')"
+        @input="store.setSaveName(($event.target as HTMLInputElement).value)"
+        @keydown="onSaveNameKeydown"
+      />
+      <span v-if="snapshot.saveNameIssue === 'invalid'" class="fsb-save-issue">{{ t("save.invalidName") }}</span>
+      <span v-else-if="snapshot.saveNameIssue === 'isDirectory'" class="fsb-save-issue">
+        {{ t("save.isDirectory", { name: snapshot.saveName }) }}
+      </span>
     </div>
 
     <!-- 右鍵選單 -->
@@ -475,7 +513,11 @@ const statusVariant = computed<"neutral" | "error" | "confirm">(() => {
         </button>
       </div>
       <div class="fsb-actions">
-        <template v-if="statusVariant === 'confirm'">
+        <template v-if="snapshot.overwriteConfirm !== null">
+          <button type="button" class="fsb-btn" @click="store.cancelOverwrite()">{{ t("button.cancel") }}</button>
+          <button type="button" class="fsb-btn fsb-btn-danger" @click="store.confirmOverwrite()">{{ t("button.overwrite") }}</button>
+        </template>
+        <template v-else-if="statusVariant === 'confirm'">
           <button type="button" class="fsb-btn" @click="store.cancelDelete()">{{ t("button.cancel") }}</button>
           <button type="button" class="fsb-btn fsb-btn-danger" @click="store.confirmDelete()">{{ t("button.delete") }}</button>
         </template>
@@ -487,7 +529,7 @@ const statusVariant = computed<"neutral" | "error" | "confirm">(() => {
             :disabled="!snapshot.canConfirmSelection"
             @click="store.confirmSelection()"
           >
-            {{ t("button.select") }}
+            {{ confirmLabel }}
           </button>
         </template>
       </div>
@@ -701,6 +743,10 @@ const statusVariant = computed<"neutral" | "error" | "confirm">(() => {
 .fsb-row-disabled {
   color: var(--fsb-text-muted);
 }
+.fsb-row-dimmed {
+  opacity: 0.45;
+  cursor: default;
+}
 .fsb-row-editing {
   background: var(--fsb-subtle-bg);
 }
@@ -778,6 +824,32 @@ const statusVariant = computed<"neutral" | "error" | "confirm">(() => {
 }
 .fsb-empty-hint {
   margin: 0;
+  font-size: var(--fsb-font-size-label);
+}
+
+/* 存檔模式檔名輸入列 */
+.fsb-save-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--fsb-section-border);
+  flex: none;
+}
+.fsb-save-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--fsb-control-height);
+  padding: 0 10px;
+  background: var(--fsb-subtle-bg);
+  border: 1px solid var(--fsb-panel-border);
+  border-radius: var(--fsb-radius);
+  color: var(--fsb-text-primary);
+  font-size: var(--fsb-font-size-row);
+}
+.fsb-save-issue {
+  flex: none;
+  color: var(--fsb-error-text);
   font-size: var(--fsb-font-size-label);
 }
 

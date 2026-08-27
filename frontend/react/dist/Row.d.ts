@@ -3,6 +3,8 @@ import { type Entry, type PathStyle, type SizeUnitSystem, type Translate } from 
 export interface RowProps {
     entry: Entry;
     selected: boolean;
+    /** 是否應淡化呈現且不可選取 (存檔模式下不符副檔名過濾, 或選取模式下的目錄以外等情形, 由 core 判定). */
+    dimmed: boolean;
     pathStyle: PathStyle;
     sizeUnit: SizeUnitSystem;
     t: Translate;

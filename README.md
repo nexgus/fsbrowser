@@ -10,6 +10,8 @@ The component itself knows nothing about SSH, S3, or any other protocol. It defi
 
 - Directory browsing with breadcrumb-free, path-first navigation (editable path bar, parent / home buttons)
 - File or directory picking, single or multiple selection, decided per invocation
+- Save mode (`selection-mode="save"`) for "save as" flows: browsing behaves like file mode, with a filename input row and non-modal overwrite confirmation; the component never writes the file itself
+- Extension filtering (`extensions` prop) for file and save modes: non-matching files are dimmed and unselectable, and save mode auto-appends an extension to a bare filename
 - Directory management: new folder, rename (inline), delete (batch, with non-modal confirmation)
 - Context menu (rename, delete, copy path, new folder, refresh, hidden files toggle)
 - Multiple roots -- Windows drive letters generalize to a root switcher that simply never appears on single-root systems
@@ -68,20 +70,20 @@ export const fsbClient = createClient(bindings);
 
 ```vue
 <script setup lang="ts">
-import { FileBrowser } from "@nexgus/fsb-vue";
-import zhHant from "@nexgus/fsb-core/locales/zh-Hant";
+import { FsBrowser } from "@nexgus/fsb-vue";
+import { zhHant } from "@nexgus/fsb-locales";
 import { fsbClient } from "./fsbClient";
 </script>
 
 <template>
-  <FileBrowser
+  <FsBrowser
     :client="fsbClient"
-    mode="dir"
-    :multiple="false"
-    size-units="si"
+    selection-mode="dir"
+    return-mode="single"
+    size-unit="si"
     :locale="zhHant"
     theme="dark"
-    @pick="(path) => console.log(path)"
+    @select="(path) => console.log(path)"
     @cancel="close()"
     @error="(err) => console.warn(err.code, err.message)"
   />
@@ -91,29 +93,60 @@ import { fsbClient } from "./fsbClient";
 **React**
 
 ```tsx
-import { FsbProvider, FileBrowser } from "@nexgus/fsb-react";
-import zhHant from "@nexgus/fsb-core/locales/zh-Hant";
+import { FsbClientProvider, FsBrowser } from "@nexgus/fsb-react";
+import { zhHant } from "@nexgus/fsb-locales";
 import { fsbClient } from "./fsbClient";
 
 function Picker() {
   return (
-    <FsbProvider client={fsbClient}>
-      <FileBrowser
-        mode="file"
-        multiple
-        sizeUnits="iec"
+    <FsbClientProvider client={fsbClient}>
+      <FsBrowser
+        selectionMode="file"
+        returnMode="multiple"
+        sizeUnit="iec"
         locale={zhHant}
         theme="light"
-        onPick={(paths) => console.log(paths)}
+        onSelect={(paths) => console.log(paths)}
         onCancel={() => setOpen(false)}
         onError={(err) => console.warn(err.code, err.message)}
       />
-    </FsbProvider>
+    </FsbClientProvider>
   );
 }
 ```
 
 Selected paths are always absolute, `/`-separated (e.g. `C:/Users/gus/data` on a Windows-style file system); convert them yourself if a consumer insists on backslashes.
+
+### Save mode and extension filtering
+
+Set `selection-mode="save"` for "save as" flows: the panel browses like file mode but keeps a filename input row visible, pre-filled from `defaultName` (`default-name` in the Vue template) and updated when the user picks an existing file from the list. Confirming emits the same `select` event with a single absolute path (current directory plus filename); `returnMode` is meaningless here and selection is always single. Add `extensions` (an array of bare extensions, e.g. `["yaml", "yml"]`) to restrict file and save modes to matching files -- non-matching entries are dimmed rather than hidden, and a bare filename typed in save mode gets the list's first extension appended automatically. If your host already filters with a semicolon-delimited glob string such as `*.yaml;*.yml`, just split it on `;` and pass the result -- the component strips the leading `*.` itself.
+
+**Vue 3**
+
+```vue
+<FsBrowser
+  :client="fsbClient"
+  selection-mode="save"
+  default-name="report.yaml"
+  :extensions="['yaml', 'yml']"
+  @select="(path) => saveTo(path)"
+  @cancel="close()"
+  @error="(err) => console.warn(err.code, err.message)"
+/>
+```
+
+**React**
+
+```tsx
+<FsBrowser
+  selectionMode="save"
+  defaultName="report.yaml"
+  extensions={["yaml", "yml"]}
+  onSelect={(path) => saveTo(path as string)}
+  onCancel={() => setOpen(false)}
+  onError={(err) => console.warn(err.code, err.message)}
+/>
+```
 
 ## Examples
 

@@ -16,6 +16,8 @@ import { EntryIcon } from "./EntryIcon.js";
 export interface RowProps {
   entry: Entry;
   selected: boolean;
+  /** 是否應淡化呈現且不可選取 (存檔模式下不符副檔名過濾, 或選取模式下的目錄以外等情形, 由 core 判定). */
+  dimmed: boolean;
   pathStyle: PathStyle;
   sizeUnit: SizeUnitSystem;
   t: Translate;
@@ -31,7 +33,7 @@ export interface RowProps {
 
 /** Row 渲染單一項目; editing 為真時該列轉為列內重新命名編輯狀態. */
 export function Row(props: RowProps) {
-  const { entry, selected, pathStyle, sizeUnit, t, editing } = props;
+  const { entry, selected, dimmed, pathStyle, sizeUnit, t, editing } = props;
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -45,6 +47,7 @@ export function Row(props: RowProps) {
     "fsb-row",
     selected ? "fsb-selected" : "",
     entry.Hidden ? "fsb-dim" : "",
+    dimmed ? "fsb-row-unselectable" : "",
   ]
     .filter(Boolean)
     .join(" ");

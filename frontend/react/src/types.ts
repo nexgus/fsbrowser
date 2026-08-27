@@ -26,6 +26,10 @@ export interface FsBrowserProps {
   returnMode?: ReturnMode;
   /** 起始目錄; 未提供時用 client 的家目錄. */
   initialDir?: string;
+  /** 存檔模式的預設檔名; 其他模式忽略. */
+  defaultName?: string;
+  /** 副檔名過濾清單 (檔案模式與存檔模式適用); 未提供時不過濾. */
+  extensions?: string[];
   /** 選定結果回呼: 單選為一個路徑, 多選為路徑陣列 (皆為內部形式). */
   onSelect?: (result: string | string[]) => void;
   /** 取消回呼. */

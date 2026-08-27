@@ -12,6 +12,7 @@ export const en = Object.freeze({
   "title": "Browse Files",
   "mode.file": "Select a file",
   "mode.dir": "Select a directory",
+  "mode.save": "Save file",
 
   // 工具列 (按鈕 tooltip 與路徑列)
   "toolbar.up": "Parent directory",
@@ -45,6 +46,12 @@ export const en = Object.freeze({
   "edit.hint": "Enter to confirm · Esc to cancel",
   "newFolder.defaultName": "untitled folder",
 
+  // 存檔模式 (檔名輸入列與覆寫確認)
+  "save.namePlaceholder": "File name",
+  "save.overwriteConfirm": "\"{name}\" already exists. Overwrite?",
+  "save.invalidName": "The file name contains characters that cannot be used.",
+  "save.isDirectory": "\"{name}\" is an existing directory. Choose another name.",
+
   // 右鍵選單
   "menu.rename": "Rename",
   "menu.delete": "Delete",
@@ -57,6 +64,8 @@ export const en = Object.freeze({
   // 按鈕
   "button.cancel": "Cancel",
   "button.select": "Select",
+  "button.save": "Save",
+  "button.overwrite": "Overwrite",
   "button.delete": "Delete",
   "button.dismissError": "Dismiss",
 

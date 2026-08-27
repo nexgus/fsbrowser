@@ -28,6 +28,8 @@ export function App() {
   const [sizeUnit, setSizeUnit] = useState<SizeUnitSystem>("si");
   const [selectionMode, setSelectionMode] = useState<SelectionMode>("file");
   const [returnMode, setReturnMode] = useState<ReturnMode>("single");
+  const [defaultName, setDefaultName] = useState("");
+  const [extensionFilter, setExtensionFilter] = useState("");
 
   const [fsMode, setFsMode] = useState<FsMode>("local");
   const [remoteStatus, setRemoteStatus] = useState<RemoteStatus>("disconnected");
@@ -42,6 +44,13 @@ export function App() {
   const [errors, setErrors] = useState<string>("");
 
   const locale = language === "zh-Hant" ? zhHant : undefined;
+
+  // extensions: 以分號切割宿主端輸入的 glob 字串, 逐項去除前後空白並濾除空字串後
+  // 轉為陣列; 全空時傳 undefined, 交由元件套用預設行為.
+  const extensions = extensionFilter
+    .split(";")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
 
   function appendError(message: string): void {
     setErrors((previous) => (previous ? `${previous}\n${message}` : message));
@@ -150,7 +159,27 @@ export function App() {
           <select value={selectionMode} onChange={(event) => setSelectionMode(event.target.value as SelectionMode)}>
             <option value="file">file</option>
             <option value="dir">dir</option>
+            <option value="save">save</option>
           </select>
+        </label>
+        <label>
+          Default name:
+          <input
+            type="text"
+            value={defaultName}
+            onChange={(event) => setDefaultName(event.target.value)}
+            style={{ width: 160 }}
+          />
+        </label>
+        <label>
+          Extension filter:
+          <input
+            type="text"
+            value={extensionFilter}
+            onChange={(event) => setExtensionFilter(event.target.value)}
+            placeholder="*.yaml;*.yml"
+            style={{ width: 160 }}
+          />
         </label>
         <label>
           Return mode:
@@ -302,6 +331,8 @@ export function App() {
                 sizeUnit={sizeUnit}
                 selectionMode={selectionMode}
                 returnMode={returnMode}
+                defaultName={defaultName || undefined}
+                extensions={extensions.length > 0 ? extensions : undefined}
                 initialDir={initialDir || undefined}
                 onSelect={handleSelect}
                 onCancel={handleCancel}

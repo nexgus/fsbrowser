@@ -20,6 +20,7 @@ import { FSB_STYLE_CSS } from "./styles.js";
 import { RootSwitcher } from "./RootSwitcher.js";
 import { Row } from "./Row.js";
 import { NewFolderRow } from "./NewFolderRow.js";
+import { SaveNameRow } from "./SaveNameRow.js";
 import { StatusBar } from "./StatusBar.js";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu.js";
 import { IconEye, IconEmptyFolder, IconHome, IconNewFolder, IconUp } from "./icons.js";
@@ -53,6 +54,8 @@ export function FsBrowser(props: FsBrowserProps) {
     selectionMode,
     returnMode: props.returnMode,
     initialDir: props.initialDir,
+    defaultName: props.defaultName,
+    extensions: props.extensions,
     onSelect: props.onSelect,
     onCancel: props.onCancel,
     onError: props.onError,
@@ -153,7 +156,9 @@ export function FsBrowser(props: FsBrowserProps) {
 
       <div className="fsb-titlebar">
         <span className="fsb-title">{t("title")}</span>
-        <span className="fsb-mode-hint">{selectionMode === "dir" ? t("mode.dir") : t("mode.file")}</span>
+        <span className="fsb-mode-hint">
+          {selectionMode === "dir" ? t("mode.dir") : selectionMode === "save" ? t("mode.save") : t("mode.file")}
+        </span>
       </div>
 
       <div className="fsb-toolbar">
@@ -268,6 +273,7 @@ export function FsBrowser(props: FsBrowserProps) {
                 key={entry.Path}
                 entry={entry}
                 selected={snapshot.selection.includes(entry.Path)}
+                dimmed={store.isEntryDimmed(entry)}
                 pathStyle={snapshot.pathStyle}
                 sizeUnit={sizeUnit}
                 t={t}
@@ -285,9 +291,20 @@ export function FsBrowser(props: FsBrowserProps) {
         )}
       </div>
 
+      {selectionMode === "save" ? (
+        <SaveNameRow
+          name={snapshot.saveName}
+          issue={snapshot.saveNameIssue}
+          t={t}
+          onChange={(name) => store.setSaveName(name)}
+          onCommit={() => store.confirmSelection()}
+        />
+      ) : null}
+
       <StatusBar
         snapshot={snapshot}
         pathStyle={snapshot.pathStyle}
+        selectionMode={selectionMode}
         t={t}
         deletingCount={deletingCountRef.current}
         onDismissError={() => store.dismissError()}
@@ -295,6 +312,8 @@ export function FsBrowser(props: FsBrowserProps) {
         onConfirmSelection={() => store.confirmSelection()}
         onConfirmDelete={handleConfirmDelete}
         onCancelDelete={() => store.cancelDelete()}
+        onConfirmOverwrite={() => void store.confirmOverwrite()}
+        onCancelOverwrite={() => store.cancelOverwrite()}
       />
 
       {menu !== null ? <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} /> : null}
