@@ -1,6 +1,6 @@
 {
   "name": "@nexgus/fsb-locales",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "fsbrowser 隨附語言包 (非內建預設, 由宿主自行 import 並以開啟參數傳入)",
   "license": "MIT",
   "type": "module",

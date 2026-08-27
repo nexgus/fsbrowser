@@ -84,8 +84,8 @@ export type ThemeOverrides = Partial<Theme>;
 /** ThemeName 是內建 theme 的名稱. */
 export type ThemeName = "light" | "dark";
 
-/** ThemeOption 是開啟參數可傳入的 theme: 內建名稱或自訂變數表. */
-export type ThemeOption = ThemeName | ThemeOverrides;
+/** ThemeOption 是開啟參數可傳入的 theme: 內建名稱, 自動依系統深淺色, 或自訂變數表. */
+export type ThemeOption = ThemeName | "auto" | ThemeOverrides;
 
 /** builtinThemes 是內建 theme 的查表. */
 export const builtinThemes: Readonly<Record<ThemeName, Theme>> = Object.freeze({
@@ -93,12 +93,39 @@ export const builtinThemes: Readonly<Record<ThemeName, Theme>> = Object.freeze({
   dark: darkTheme,
 });
 
+const DARK_MEDIA_QUERY = "(prefers-color-scheme: dark)";
+
+/**
+ * detectSystemTheme 偵測目前系統的深淺色偏好, 回傳對應的內建 theme 名稱.
+ * 無 `window` 或無 `matchMedia` 的環境 (SSR / 測試) 一律回傳 "light".
+ */
+export function detectSystemTheme(): ThemeName {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return "light";
+  return window.matchMedia(DARK_MEDIA_QUERY).matches ? "dark" : "light";
+}
+
+/**
+ * subscribeSystemTheme 訂閱系統深淺色偏好變更: 變更時以新的 ThemeName 呼叫 callback,
+ * 回傳取消訂閱函式. 無 `matchMedia` 的環境為 no-op, 回傳空的取消函式.
+ */
+export function subscribeSystemTheme(callback: (theme: ThemeName) => void): () => void {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return () => undefined;
+  const media = window.matchMedia(DARK_MEDIA_QUERY);
+  const listener = (event: MediaQueryListEvent): void => {
+    callback(event.matches ? "dark" : "light");
+  };
+  media.addEventListener("change", listener);
+  return () => media.removeEventListener("change", listener);
+}
+
 /**
  * resolveTheme 把開啟參數的 theme 補齊為完整變數表: 傳入內建名稱時取該內建 theme;
- * 傳入自訂變數表時, 缺少的變數一律以內建淺色補齊 (第 6.2 節). 未提供時為內建淺色.
+ * 傳入 "auto" 時依系統深淺色偏好取對應內建 theme; 傳入自訂變數表時, 缺少的變數一律以
+ * 內建淺色補齊 (第 6.2 節). 未提供時為內建淺色.
  */
 export function resolveTheme(option?: ThemeOption): Theme {
   if (option === undefined) return { ...lightTheme };
+  if (option === "auto") return { ...builtinThemes[detectSystemTheme()] };
   if (option === "light" || option === "dark") return { ...builtinThemes[option] };
   const resolved = { ...lightTheme } as Theme;
   for (const key of THEME_KEYS) {

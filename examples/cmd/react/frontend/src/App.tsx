@@ -24,7 +24,7 @@ function describeCause(err: unknown): string {
 
 export function App() {
   const [language, setLanguage] = useState<LanguageOption>("en");
-  const [theme, setTheme] = useState<ThemeName>("light");
+  const [theme, setTheme] = useState<ThemeName | "auto">("auto");
   const [sizeUnit, setSizeUnit] = useState<SizeUnitSystem>("si");
   const [selectionMode, setSelectionMode] = useState<SelectionMode>("file");
   const [returnMode, setReturnMode] = useState<ReturnMode>("single");
@@ -142,7 +142,8 @@ export function App() {
         </label>
         <label>
           Theme:
-          <select value={theme} onChange={(event) => setTheme(event.target.value as ThemeName)}>
+          <select value={theme} onChange={(event) => setTheme(event.target.value as ThemeName | "auto")}>
+            <option value="auto">auto</option>
             <option value="light">light</option>
             <option value="dark">dark</option>
           </select>

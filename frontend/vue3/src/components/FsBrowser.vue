@@ -16,6 +16,7 @@ import {
   isDirectoryLike,
   isSelectableAs,
   resolveTheme,
+  subscribeSystemTheme,
   themeToCssVars,
   toDisplayPath,
 } from "@nexgus/fsb-core";
@@ -29,7 +30,7 @@ const props = withDefaults(
     client?: FsbClient;
     /** 語言包; 未提供時使用內建英文. */
     locale?: LocalePack;
-    /** theme: 內建名稱或自訂變數表; 未提供時使用內建淺色. */
+    /** theme: 內建名稱, "auto" (隨系統深淺色即時切換), 或自訂變數表; 未提供時使用內建淺色. */
     theme?: ThemeOption;
     /** 檔案大小單位制. */
     sizeUnit?: SizeUnitSystem;
@@ -75,7 +76,31 @@ if (resolvedClient === undefined) {
 }
 
 const t = createTranslator(props.locale);
-const themeVars = computed(() => themeToCssVars(resolveTheme(props.theme)));
+
+// theme 為 "auto" 時訂閱系統深淺色偏好, 變更時以 tick 觸發重新解析並重繪.
+const systemThemeTick = ref(0);
+let unsubscribeSystemTheme: (() => void) | null = null;
+
+function syncSystemThemeSubscription(): void {
+  unsubscribeSystemTheme?.();
+  unsubscribeSystemTheme = null;
+  if (props.theme === "auto") {
+    unsubscribeSystemTheme = subscribeSystemTheme(() => {
+      systemThemeTick.value += 1;
+    });
+  }
+}
+
+watch(() => props.theme, syncSystemThemeSubscription, { immediate: true });
+onBeforeUnmount(() => {
+  unsubscribeSystemTheme?.();
+  unsubscribeSystemTheme = null;
+});
+
+const themeVars = computed(() => {
+  void systemThemeTick.value;
+  return themeToCssVars(resolveTheme(props.theme));
+});
 
 const { store, snapshot } = useBrowserStore({
   client: resolvedClient,

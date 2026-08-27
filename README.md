@@ -19,7 +19,7 @@ The component itself knows nothing about SSH, S3, or any other protocol. It defi
 - Symlink-aware icons (link-to-file vs. link-to-directory), plus sockets, FIFOs, device files, and broken links
 - Errors surface in a fixed-height status bar -- the layout never jumps, and the same structured error is emitted to the host application
 - No dialogs, ever; how (and whether) to open windows is your application's business
-- Theming: built-in light and dark themes, custom themes via a flat token table
+- Theming: built-in light and dark themes, an "auto" mode that follows the system's light/dark preference and updates live, custom themes via a flat token table
 - Localization: English built in, other languages (including Traditional Chinese) supplied as language packs; the host picks the language per invocation -- no auto-detection
 - Windows and macOS hosts supported
 

@@ -5,7 +5,7 @@ type __VLS_Props = {
     client?: FsbClient;
     /** 語言包; 未提供時使用內建英文. */
     locale?: LocalePack;
-    /** theme: 內建名稱或自訂變數表; 未提供時使用內建淺色. */
+    /** theme: 內建名稱, "auto" (隨系統深淺色即時切換), 或自訂變數表; 未提供時使用內建淺色. */
     theme?: ThemeOption;
     /** 檔案大小單位制. */
     sizeUnit?: SizeUnitSystem;

@@ -13,7 +13,7 @@ import * as hostctl from "../bindings/github.com/nexgus/fsbrowser/examples/pkg/h
 // ---- 參數區 --------------------------------------------------------------
 
 const lang = ref<"en" | "zh-Hant">("en");
-const themeName = ref<ThemeName>("light");
+const themeName = ref<ThemeName | "auto">("auto");
 const sizeUnit = ref<SizeUnitSystem>("si");
 const selectionMode = ref<SelectionMode>("file");
 const returnMode = ref<ReturnMode>("single");
@@ -177,6 +177,7 @@ function describeError(err: unknown): string {
       <label>
         Theme:
         <select v-model="themeName">
+          <option value="auto">auto</option>
           <option value="light">light</option>
           <option value="dark">dark</option>
         </select>

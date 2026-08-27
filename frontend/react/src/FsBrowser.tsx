@@ -9,6 +9,7 @@ import {
   isDirectoryLike,
   isSelectableAs,
   resolveTheme,
+  subscribeSystemTheme,
   themeToCssVars,
   toDisplayPath,
   type Entry,
@@ -44,7 +45,16 @@ export function FsBrowser(props: FsBrowserProps) {
   }
 
   const t = useMemo(() => createTranslator(props.locale), [props.locale]);
-  const theme = useMemo(() => resolveTheme(props.theme), [props.theme]);
+
+  // theme 為 "auto" 時訂閱系統深淺色偏好, 變更時以 tick 觸發重新解析.
+  const [systemThemeTick, setSystemThemeTick] = useState(0);
+  useEffect(() => {
+    if (props.theme !== "auto") return;
+    const unsubscribe = subscribeSystemTheme(() => setSystemThemeTick((tick) => tick + 1));
+    return unsubscribe;
+  }, [props.theme]);
+
+  const theme = useMemo(() => resolveTheme(props.theme), [props.theme, systemThemeTick]);
   const cssVars = useMemo(() => themeToCssVars(theme) as CSSProperties, [theme]);
   const sizeUnit = props.sizeUnit ?? "si";
   const selectionMode = props.selectionMode;

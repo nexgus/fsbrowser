@@ -53,8 +53,10 @@ export {
   builtinThemes,
   cssVarName,
   darkTheme,
+  detectSystemTheme,
   lightTheme,
   resolveTheme,
+  subscribeSystemTheme,
   themeToCssVars,
 } from "./theme.js";
 

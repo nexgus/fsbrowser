@@ -3,7 +3,7 @@ import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-run
 // 欄位標頭, 列表, 狀態列 + 動作區. 所有狀態邏輯經 useBrowserStore 交給 core 的
 // BrowserStore 處理, 本檔只負責畫面呈現與輸入事件轉呼叫.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createTranslator, fromDisplayPath, isDirectoryLike, isSelectableAs, resolveTheme, themeToCssVars, toDisplayPath, } from "@nexgus/fsb-core";
+import { createTranslator, fromDisplayPath, isDirectoryLike, isSelectableAs, resolveTheme, subscribeSystemTheme, themeToCssVars, toDisplayPath, } from "@nexgus/fsb-core";
 import { useFsbClientContext } from "./context.js";
 import { useBrowserStore } from "./useBrowserStore.js";
 import { FSB_STYLE_CSS } from "./styles.js";
@@ -23,7 +23,15 @@ export function FsBrowser(props) {
         throw new Error("<FsBrowser>: 未提供 client, 請以 prop 傳入 client, 或以 <FsbClientProvider> 注入.");
     }
     const t = useMemo(() => createTranslator(props.locale), [props.locale]);
-    const theme = useMemo(() => resolveTheme(props.theme), [props.theme]);
+    // theme 為 "auto" 時訂閱系統深淺色偏好, 變更時以 tick 觸發重新解析.
+    const [systemThemeTick, setSystemThemeTick] = useState(0);
+    useEffect(() => {
+        if (props.theme !== "auto")
+            return;
+        const unsubscribe = subscribeSystemTheme(() => setSystemThemeTick((tick) => tick + 1));
+        return unsubscribe;
+    }, [props.theme]);
+    const theme = useMemo(() => resolveTheme(props.theme), [props.theme, systemThemeTick]);
     const cssVars = useMemo(() => themeToCssVars(theme), [theme]);
     const sizeUnit = props.sizeUnit ?? "si";
     const selectionMode = props.selectionMode;
