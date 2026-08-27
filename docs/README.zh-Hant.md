@@ -196,6 +196,28 @@ Windows 版則將 `.exe` 複製到 Windows 機器上直接執行; 系統需求�
 
 四個套件以同一個 git tag 一起發版.
 
+### 安裝前端套件
+
+`@nexgus/fsb-*` 套件並未發佈到 npm registry; 每個 release 都會在 [releases 頁面](https://github.com/nexgus/fsbrowser/releases)附上一個 `fsbrowser.npm.<版本>+<hash>.tar.gz` asset, 內含全部前端套件.
+
+1. 從 releases 頁面下載 tarball, 解壓到任意位置:
+
+   ```bash
+   tar -xzf fsbrowser.npm.0.2.0+abc1234.tar.gz
+   ```
+
+2. 在應用程式的 `package.json` 以 `file:` 依賴指向解壓出來的目錄 (依需求選 `react` 或 `vue3`):
+
+   ```json
+   "dependencies": {
+     "@nexgus/fsb-core": "file:../fsbrowser-npm-0.2.0/core",
+     "@nexgus/fsb-locales": "file:../fsbrowser-npm-0.2.0/locales",
+     "@nexgus/fsb-react": "file:../fsbrowser-npm-0.2.0/react"
+   }
+   ```
+
+tarball 內的套件之間以相對 `file:` 路徑互相依賴, 解壓後請保持目錄結構完整.
+
 ## 授權
 
 [MIT](../LICENSE.md)

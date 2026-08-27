@@ -1,8 +1,8 @@
 .DS_Store
 CLAUDE.md
 /.claude/
-/docs/experiments/
 /docs/plans/
 /test/bin/
 /test/frontend/bindings/
 temp/
+/bin/

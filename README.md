@@ -196,6 +196,28 @@ For Windows, copy the `.exe` to a Windows machine and run it there; the only sys
 
 All four are versioned together by a single git tag.
 
+### Installing the front-end packages
+
+The `@nexgus/fsb-*` packages are not published to the npm registry. Instead, every release on the [releases page](https://github.com/nexgus/fsbrowser/releases) carries a `fsbrowser.npm.<version>+<hash>.tar.gz` asset that bundles all of them.
+
+1. Download the tarball from the releases page and extract it anywhere:
+
+   ```bash
+   tar -xzf fsbrowser.npm.0.2.0+abc1234.tar.gz
+   ```
+
+2. Reference the extracted directories from your application's `package.json` with `file:` dependencies (pick `react` or `vue3` as appropriate):
+
+   ```json
+   "dependencies": {
+     "@nexgus/fsb-core": "file:../fsbrowser-npm-0.2.0/core",
+     "@nexgus/fsb-locales": "file:../fsbrowser-npm-0.2.0/locales",
+     "@nexgus/fsb-react": "file:../fsbrowser-npm-0.2.0/react"
+   }
+   ```
+
+The packages inside the tarball depend on each other through relative `file:` paths, so keep the extracted directory layout intact.
+
 ## License
 
 [MIT](LICENSE.md)
