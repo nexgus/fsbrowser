@@ -1,0 +1,1 @@
+{"version":3,"file":"useBrowserStore.d.ts","sourceRoot":"","sources":["../src/useBrowserStore.ts"],"names":[],"mappings":"AAIA,OAAO,EAEL,KAAK,eAAe,EACpB,KAAK,YAAY,EACjB,KAAK,mBAAmB,EACzB,MAAM,kBAAkB,CAAC;AAE1B,sEAAsE;AACtE,MAAM,WAAW,qBAAqB;IACpC,KAAK,EAAE,YAAY,CAAC;IACpB,QAAQ,EAAE,eAAe,CAAC;CAC3B;AAED;;;;GAIG;AACH,wBAAgB,eAAe,CAAC,OAAO,EAAE,mBAAmB,GAAG,qBAAqB,CAiBnF"}

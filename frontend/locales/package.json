@@ -1,4 +1,19 @@
 {
-  "private": true,
-  "type": "module"
+  "name": "@nexgus/fsb-locales",
+  "version": "0.1.0",
+  "description": "fsbrowser 隨附語言包 (非內建預設, 由宿主自行 import 並以開啟參數傳入)",
+  "license": "MIT",
+  "type": "module",
+  "types": "./zh-Hant.ts",
+  "exports": {
+    ".": "./zh-Hant.ts",
+    "./zh-Hant": "./zh-Hant.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "zh-Hant.ts"
+  ],
+  "dependencies": {
+    "@nexgus/fsb-core": "file:../core"
+  }
 }

@@ -5,3 +5,8 @@ CLAUDE.md
 /docs/plans/
 /test/bin/
 /test/frontend/bindings/
+temp/
+/examples/vue3/frontend/bindings/
+/examples/vue3/bin/
+/examples/react/frontend/bindings/
+/examples/react/bin/

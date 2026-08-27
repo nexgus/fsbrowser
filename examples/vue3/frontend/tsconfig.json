@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "allowJs": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      // @nexgus/fsb-locales 以 file: 相依安裝, node_modules 內為 symlink; tsc 解析模組時
+      // 會先還原成真實路徑 (frontend/locales/), 從該處往上找不到 @nexgus/fsb-core, 故在此
+      // 明確指向本專案已安裝的 core 型別.
+      "@nexgus/fsb-core": ["./node_modules/@nexgus/fsb-core/dist/index.d.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.vue"]
+}

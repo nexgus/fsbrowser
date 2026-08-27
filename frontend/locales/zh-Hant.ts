@@ -3,7 +3,7 @@
 // 本包隨 core 發佈但不內建為預設: 宿主要用繁體中文時 import 本包並於開啟參數傳入,
 // 與任何第三方自製語言包走完全相同的路徑:
 //
-//     import { zhHant } from "@nexgus/fsbrowser/frontend/locales/zh-Hant.js";
+//     import { zhHant } from "@nexgus/fsb-locales";
 //     <FsBrowser :client="fsbClient" :locale="zhHant" />
 //
 // 型別為 core 匯出的 LocalePack (詞條鍵集合由 core 定義並凍結); 缺鍵會以內建英文補齊,
