@@ -2,7 +2,7 @@
 // 出現 (例如 Windows 磁碟機); 單一根時完全不渲染, 元件內沒有任何 Windows 特例判斷.
 
 import { useEffect, useRef, useState } from "react";
-import { toDisplayPath, type PathStyle } from "@nexgus/fsb-core";
+import { rootDisplayLabel, type PathStyle } from "@nexgus/fsb-core";
 import { IconCheck, IconChevronDown } from "./icons.js";
 
 export interface RootSwitcherProps {
@@ -12,14 +12,6 @@ export interface RootSwitcherProps {
   disabled?: boolean;
   onSwitch: (root: string) => void;
   ariaLabel: string;
-}
-
-/** rootLabel 把根路徑轉為顯示用簡短名稱 (例如 "C:/" 顯示為 "C:"). */
-function rootLabel(root: string, style: PathStyle): string {
-  const display = toDisplayPath(root, style);
-  return display.length > 1 && (display.endsWith("/") || display.endsWith("\\"))
-    ? display.slice(0, -1)
-    : display;
 }
 
 export function RootSwitcher({ roots, currentRoot, pathStyle, disabled, onSwitch, ariaLabel }: RootSwitcherProps) {
@@ -46,7 +38,7 @@ export function RootSwitcher({ roots, currentRoot, pathStyle, disabled, onSwitch
         disabled={disabled}
         onClick={() => setOpen((value) => !value)}
       >
-        <span>{rootLabel(currentRoot, pathStyle)}</span>
+        <span>{rootDisplayLabel(currentRoot, pathStyle)}</span>
         <IconChevronDown size={12} />
       </button>
       {open ? (
@@ -64,7 +56,7 @@ export function RootSwitcher({ roots, currentRoot, pathStyle, disabled, onSwitch
                 }}
               >
                 <span className="fsb-root-menu-item-check">{current ? <IconCheck size={12} /> : null}</span>
-                <span>{rootLabel(root, pathStyle)}</span>
+                <span>{rootDisplayLabel(root, pathStyle)}</span>
               </div>
             );
           })}

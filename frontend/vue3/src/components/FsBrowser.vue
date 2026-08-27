@@ -5,7 +5,6 @@ import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } fr
 import type { Entry, FsbClient, FsbError, LocalePack, ReturnMode, SelectionMode, ThemeOption } from "@nexgus/fsb-core";
 import type { SizeUnitSystem } from "@nexgus/fsb-core";
 import {
-  baseName,
   createTranslator,
   effectiveKind,
   formatDateTime,
@@ -16,6 +15,7 @@ import {
   isDirectoryLike,
   isSelectableAs,
   resolveTheme,
+  rootDisplayLabel,
   subscribeSystemTheme,
   themeToCssVars,
   toDisplayPath,
@@ -346,7 +346,7 @@ const statusVariant = computed<"neutral" | "error" | "confirm">(() => {
 
       <div v-if="snapshot.roots.length > 1" class="fsb-root-switcher">
         <button type="button" class="fsb-btn fsb-root-btn" :title="t('toolbar.root')" @click.stop="toggleRootMenu()">
-          <span class="fsb-mono">{{ baseName(snapshot.currentRoot) || snapshot.currentRoot }}</span>
+          <span class="fsb-mono">{{ rootDisplayLabel(snapshot.currentRoot, snapshot.pathStyle) }}</span>
           <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 6 L8 10 L12 6" />
           </svg>
@@ -359,7 +359,7 @@ const statusVariant = computed<"neutral" | "error" | "confirm">(() => {
             @click="chooseRoot(root)"
           >
             <span class="fsb-menu-check">{{ root === snapshot.currentRoot ? "✓" : "" }}</span>
-            {{ toDisplayPath(root, snapshot.pathStyle) }}
+            {{ rootDisplayLabel(root, snapshot.pathStyle) }}
           </li>
         </ul>
       </div>

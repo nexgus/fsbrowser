@@ -1,6 +1,6 @@
 {
   "name": "@nexgus/fsb-vue",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Vue 3 component package for the fsbrowser file system browser",
   "license": "MIT",
   "type": "module",

@@ -29,6 +29,7 @@ export {
   joinPath,
   normalizePath,
   parentDir,
+  rootDisplayLabel,
   rootOf,
   toDisplayPath,
 } from "./path.js";

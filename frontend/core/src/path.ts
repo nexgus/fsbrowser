@@ -92,6 +92,17 @@ export function toDisplayPath(path: string, style: PathStyle): string {
 }
 
 /**
+ * rootDisplayLabel 把根路徑轉為顯示用簡短標籤: 磁碟機根去除結尾分隔符 (如 "C:/" 顯示為
+ * "C:"), POSIX 根 "/" 維持原樣; 分隔符寫法依路徑風格.
+ */
+export function rootDisplayLabel(root: string, style: PathStyle): string {
+  const display = toDisplayPath(root, style);
+  return display.length > 1 && (display.endsWith("/") || display.endsWith("\\"))
+    ? display.slice(0, -1)
+    : display;
+}
+
+/**
  * fromDisplayPath 把使用者輸入 (可能混用 "/" 與 "\") 正規化回內部形式.
  */
 export function fromDisplayPath(input: string): string {
