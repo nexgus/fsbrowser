@@ -1,6 +1,7 @@
 package sshfs
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -281,18 +282,25 @@ func TestDelete(t *testing.T) {
 		t.Fatalf("Delete 失敗: %v", err)
 	}
 	cmd := runner.cmds[0]
-	if !strings.Contains(cmd, "rmdir -- '/tmp/a'") || !strings.Contains(cmd, "rm -- '/tmp/a'") {
-		t.Errorf("Delete 下發的指令 = %q, 預期目錄以 rmdir 刪除, 其餘以 rm 刪除", cmd)
-	}
-	if strings.Contains(cmd, "-r") {
-		t.Error("Delete 不應遞迴刪除")
+	if cmd != "rm -r -- '/tmp/a'" {
+		t.Errorf("Delete 下發的指令 = %q, 預期 rm -r -- '/tmp/a'", cmd)
 	}
 }
 
-func TestDeleteNotEmpty(t *testing.T) {
-	f, _ := newFS(fakeResult{stderr: "rmdir: failed to remove '/tmp/a': Directory not empty\n", exit: 1})
-	if code := codeOf(t, f.Delete("/tmp/a")); code != fsb.ErrNotEmpty {
-		t.Error("刪除非空目錄未回報 not_empty")
+func TestDeleteNoForceFlag(t *testing.T) {
+	f, runner := newFS(fakeResult{})
+	if err := f.Delete("/tmp/a"); err != nil {
+		t.Fatalf("Delete 失敗: %v", err)
+	}
+	if strings.Contains(runner.cmds[0], "-f") {
+		t.Errorf("Delete 不應帶強制旗標, 下發的指令 = %q", runner.cmds[0])
+	}
+}
+
+func TestDeleteNotFound(t *testing.T) {
+	f, _ := newFS(fakeResult{stderr: "rm: cannot remove '/tmp/a': No such file or directory\n", exit: 1})
+	if code := codeOf(t, f.Delete("/tmp/a")); code != fsb.ErrNotFound {
+		t.Error("刪除不存在的路徑未回報 not_found")
 	}
 }
 
@@ -316,6 +324,138 @@ func TestHomeUnavailable(t *testing.T) {
 	f := NewFS(&fakeRunner{}, "user@host", "")
 	if _, err := f.Home(); codeOf(t, err) != fsb.ErrIO {
 		t.Error("未取得遠端家目錄時未回報 io_error")
+	}
+}
+
+// fakeRunnerContext 在 fakeRunner 之上加上 RunnerContext 能力: RunContext 模擬指令
+// 正在執行中, 阻塞至 ctx 被取消才回傳 ctx.Err(), 供測試 FS.CopyContext / MoveContext
+// 對可取消執行器的處理路徑 (呼叫當下 ctx 尚未取消, 需依賴 RunnerContext 才能中止),
+// 不需要真正的 SSH 連線 (真正中止執行中指令的 session 關閉機制屬 dial.go 之
+// clientRunner, 需要實機環境, 不在此處測試範圍).
+type fakeRunnerContext struct {
+	fakeRunner
+}
+
+func (r *fakeRunnerContext) RunContext(ctx context.Context, cmd string) ([]byte, []byte, int, error) {
+	<-ctx.Done()
+	return nil, nil, 0, ctx.Err()
+}
+
+// newFSWithContext 同 newFS, 但底層執行器另滿足 RunnerContext.
+func newFSWithContext(results ...fakeResult) (*FS, *fakeRunnerContext) {
+	r := &fakeRunnerContext{fakeRunner{results: results}}
+	return NewFS(r, "user@host", "/home/user"), r
+}
+
+func TestCopySingleFile(t *testing.T) {
+	f, runner := newFS(fakeResult{})
+	if err := f.CopyContext(context.Background(), "/tmp/a.txt", "/tmp/b.txt", false); err != nil {
+		t.Fatalf("CopyContext 失敗: %v", err)
+	}
+	cmd := runner.cmds[0]
+	if !strings.Contains(cmd, "cp -a -- '/tmp/a.txt' '/tmp/b.txt'") {
+		t.Errorf("CopyContext 下發的指令 = %q", cmd)
+	}
+	if !strings.Contains(cmd, "File exists") {
+		t.Errorf("overwrite 為偽時的指令未含既有目標的檢查: %q", cmd)
+	}
+}
+
+func TestCopyDirRecursive(t *testing.T) {
+	f, runner := newFS(fakeResult{})
+	if err := f.CopyContext(context.Background(), "/tmp/src", "/tmp/dst", false); err != nil {
+		t.Fatalf("CopyContext 失敗: %v", err)
+	}
+	cmd := runner.cmds[0]
+	// 目錄的走訪與遞迴全交由遠端的 cp -a 進行, 本機端只下發單一指令.
+	if len(runner.cmds) != 1 {
+		t.Errorf("CopyContext 下發了 %d 道指令, 預期只有一道 (走訪交由遠端)", len(runner.cmds))
+	}
+	if !strings.Contains(cmd, "cp -a -- '/tmp/src' '/tmp/dst'") {
+		t.Errorf("CopyContext 下發的指令 = %q", cmd)
+	}
+}
+
+func TestCopyAlreadyExists(t *testing.T) {
+	// 模擬遠端於 overwrite 為偽時偵測到目標已存在, 依既有的 classify 對映為 already_exists.
+	f, _ := newFS(fakeResult{stderr: "cp: target File exists\n", exit: 1})
+	err := f.CopyContext(context.Background(), "/tmp/a.txt", "/tmp/b.txt", false)
+	if code := codeOf(t, err); code != fsb.ErrAlreadyExists {
+		t.Errorf("錯誤代碼 = %q, 預期 already_exists", code)
+	}
+}
+
+func TestCopyOverwriteMerge(t *testing.T) {
+	f, runner := newFS(fakeResult{})
+	if err := f.CopyContext(context.Background(), "/tmp/src", "/tmp/dst", true); err != nil {
+		t.Fatalf("CopyContext 失敗: %v", err)
+	}
+	cmd := runner.cmds[0]
+	// 合併語意 (計劃書第 5.4 節): 來源以 "/." 結尾複製其內容而非其本身, 併入既有目錄.
+	if !strings.Contains(cmd, "cp -a -- '/tmp/src'/. '/tmp/dst'/") {
+		t.Errorf("overwrite 為真時的合併指令 = %q", cmd)
+	}
+	if strings.Contains(cmd, "File exists") {
+		t.Errorf("overwrite 為真時不應含既有目標的存在性檢查: %q", cmd)
+	}
+}
+
+func TestMoveSourceGone(t *testing.T) {
+	f, runner := newFS(fakeResult{})
+	if err := f.MoveContext(context.Background(), "/tmp/a.txt", "/tmp/b.txt", false); err != nil {
+		t.Fatalf("MoveContext 失敗: %v", err)
+	}
+	cmd := runner.cmds[0]
+	// mv 本身即會使來源於成功後不再存在.
+	if !strings.Contains(cmd, "mv -- '/tmp/a.txt' '/tmp/b.txt'") {
+		t.Errorf("MoveContext 下發的指令 = %q", cmd)
+	}
+}
+
+func TestMoveOverwriteMerge(t *testing.T) {
+	f, runner := newFS(fakeResult{})
+	if err := f.MoveContext(context.Background(), "/tmp/src", "/tmp/dst", true); err != nil {
+		t.Fatalf("MoveContext 失敗: %v", err)
+	}
+	cmd := runner.cmds[0]
+	// 目錄對目錄的合併語意 mv 無法表達, 改以複製內容後刪除來源達成, 使來源仍於成功後消失.
+	if !strings.Contains(cmd, "cp -a -- '/tmp/src'/. '/tmp/dst'/ && rm -rf -- '/tmp/src'") {
+		t.Errorf("overwrite 為真時的合併搬移指令 = %q", cmd)
+	}
+}
+
+func TestCopyMoveCanceledBeforeStart(t *testing.T) {
+	f, runner := newFS()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if err := f.CopyContext(ctx, "/tmp/a.txt", "/tmp/b.txt", false); !errors.Is(err, context.Canceled) {
+		t.Errorf("CopyContext 於已取消的 ctx 下回傳 %v, 預期滿足 errors.Is(_, context.Canceled)", err)
+	}
+	if err := f.MoveContext(ctx, "/tmp/a.txt", "/tmp/b.txt", false); !errors.Is(err, context.Canceled) {
+		t.Errorf("MoveContext 於已取消的 ctx 下回傳 %v, 預期滿足 errors.Is(_, context.Canceled)", err)
+	}
+	if len(runner.cmds) != 0 {
+		t.Errorf("已取消的 ctx 仍下發了 %d 道指令, 預期一道都不下發", len(runner.cmds))
+	}
+}
+
+func TestCopyMoveCanceledViaRunnerContext(t *testing.T) {
+	// 模擬指令執行中收到取消 (呼叫當下 ctx 尚未取消, 於執行途中才取消): 執行器額外
+	// 滿足 RunnerContext, RunContext 阻塞至取消才回傳 ctx.Err(); 此錯誤應原樣回傳,
+	// 不經過 classify 誤歸類為 disconnected (計劃書第 3.3 節: 讓橋接層以 errors.Is
+	// 歸類為 canceled).
+	f, _ := newFSWithContext(fakeResult{})
+	ctx, cancel := context.WithCancel(context.Background())
+	time.AfterFunc(10*time.Millisecond, cancel)
+
+	err := f.CopyContext(ctx, "/tmp/a.txt", "/tmp/b.txt", false)
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("CopyContext 回傳 %v, 預期滿足 errors.Is(_, context.Canceled)", err)
+	}
+	var fe *fsb.Error
+	if errors.As(err, &fe) {
+		t.Errorf("取消不應被包成結構化錯誤, 實際為 %+v", fe)
 	}
 }
 

@@ -17,7 +17,7 @@ export {
 export type { ErrorCode, FsbError, FsbOperation } from "./errors.js";
 export { ERROR_CODES, FsbOperationError, isErrorCode, normalizeError, toFsbError } from "./errors.js";
 
-export type { FsbBindings, FsbClient } from "./client.js";
+export type { FsbBindings, FsbCapabilities, FsbClient, FsbOperationHandle } from "./client.js";
 export { REQUIRED_BINDING_METHODS, createClient, missingBindingMethods } from "./client.js";
 
 export {
@@ -25,8 +25,10 @@ export {
   fromDisplayPath,
   isAbsolutePath,
   isRootPath,
+  isInsidePath,
   isValidName,
   joinPath,
+  pathEquals,
   normalizePath,
   parentDir,
   rootDisplayLabel,
@@ -45,7 +47,9 @@ export {
   errorMessageKey,
   formatErrorText,
   interpolate,
+  isMacPlatform,
   resolveMessages,
+  shortcutLabel,
 } from "./i18n.js";
 
 export type { Theme, ThemeKey, ThemeName, ThemeOption, ThemeOverrides } from "./theme.js";
@@ -65,9 +69,17 @@ export type {
   BrowserSnapshot,
   BrowserStore,
   BrowserStoreOptions,
+  ClipboardMode,
+  ClipboardState,
   DeleteConfirmState,
+  FsbWarning,
   NewFolderState,
   OverwriteConfirmState,
+  PasteConflictChoice,
+  PasteConflictState,
+  PasteFailure,
+  PasteOutcomeState,
+  PasteProgressState,
   RenameState,
   SaveNameIssue,
 } from "./store.js";

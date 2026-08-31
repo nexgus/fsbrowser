@@ -21,6 +21,9 @@ function makeBindings(overrides: Partial<Record<string, unknown>> = {}): FsbBind
     MakeDir: async () => undefined,
     Rename: async () => undefined,
     Delete: async () => undefined,
+    Capabilities: async () => ({ canCopy: true, canMove: true, canCancel: true }),
+    Copy: () => Promise.resolve(undefined),
+    Move: () => Promise.resolve(undefined),
     // 宿主端操作, client 不使用亦不驗證.
     SetFileSystem: async () => undefined,
   };
@@ -31,7 +34,7 @@ describe("createClient", () => {
   it("必要方法齊全時建立 client", () => {
     const client = createClient(makeBindings());
     expect(typeof client.list).toBe("function");
-    expect(REQUIRED_BINDING_METHODS).toHaveLength(8);
+    expect(REQUIRED_BINDING_METHODS).toHaveLength(11);
     expect(REQUIRED_BINDING_METHODS).not.toContain("SetFileSystem");
   });
 
@@ -45,7 +48,7 @@ describe("createClient", () => {
 
   it("傳入非物件時視為全部方法缺少", () => {
     expect(() => createClient(undefined as unknown as FsbBindings)).toThrowError(/List/);
-    expect(missingBindingMethods(null)).toHaveLength(8);
+    expect(missingBindingMethods(null)).toHaveLength(11);
   });
 
   it("缺少 SetFileSystem 不影響驗證", () => {

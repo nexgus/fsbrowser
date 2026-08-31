@@ -1,6 +1,7 @@
 package localfs
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -228,15 +229,15 @@ func TestDelete(t *testing.T) {
 		t.Errorf("Delete 後的錯誤代碼 = %q, 預期 not_found", code)
 	}
 
-	// docs 內尚有 notes.txt, 不遞迴刪除應回報 not_empty.
-	if code := codeOf(t, f.Delete(root+"/docs")); code != fsb.ErrNotEmpty {
-		t.Errorf("刪除非空目錄的錯誤代碼 = %q, 預期 not_empty", code)
-	}
-	if err := f.Delete(root + "/docs/notes.txt"); err != nil {
-		t.Fatalf("Delete 目錄內檔案失敗: %v", err)
-	}
+	// docs 內尚有 notes.txt, 刪除應遞迴連同內容一併移除.
 	if err := f.Delete(root + "/docs"); err != nil {
-		t.Fatalf("Delete 已清空目錄失敗: %v", err)
+		t.Fatalf("Delete 非空目錄失敗: %v", err)
+	}
+	if code := codeOf(t, mustErr(f.Stat(root+"/docs"))); code != fsb.ErrNotFound {
+		t.Errorf("Delete 後 docs 的錯誤代碼 = %q, 預期 not_found", code)
+	}
+	if code := codeOf(t, mustErr(f.Stat(root+"/docs/notes.txt"))); code != fsb.ErrNotFound {
+		t.Errorf("Delete 後 docs/notes.txt 的錯誤代碼 = %q, 預期 not_found", code)
 	}
 
 	if code := codeOf(t, f.Delete(root+"/nowhere")); code != fsb.ErrNotFound {
@@ -332,3 +333,154 @@ func mustErr(_ fsb.Entry, err error) error { return err }
 
 // mustErr2 取出 ([]Entry, error) 回傳值中的錯誤, 供測試以單一運算式傳給 codeOf.
 func mustErr2(_ []fsb.Entry, err error) error { return err }
+
+// readFile 讀出檔案內容, 失敗即使測試失敗.
+func readFile(t *testing.T, p string) string {
+	t.Helper()
+	data, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatalf("讀取 %s 失敗: %v", p, err)
+	}
+	return string(data)
+}
+
+func TestCopySingleFile(t *testing.T) {
+	f := New()
+	root := setupTree(t)
+
+	if err := f.CopyContext(context.Background(), root+"/readme.txt", root+"/copy.txt", false); err != nil {
+		t.Fatalf("CopyContext 失敗: %v", err)
+	}
+	if got := readFile(t, toOS(root+"/copy.txt")); got != "hello" {
+		t.Errorf("複本內容 = %q, 預期 hello", got)
+	}
+	// 來源應保持不變.
+	if got := readFile(t, toOS(root+"/readme.txt")); got != "hello" {
+		t.Errorf("來源內容於複製後變為 %q, 預期不變", got)
+	}
+}
+
+func TestCopyDirRecursive(t *testing.T) {
+	f := New()
+	root := setupTree(t)
+
+	if err := f.CopyContext(context.Background(), root+"/docs", root+"/docs-copy", false); err != nil {
+		t.Fatalf("CopyContext 失敗: %v", err)
+	}
+	if got := readFile(t, toOS(root+"/docs-copy/notes.txt")); got != "note" {
+		t.Errorf("裡層檔案內容 = %q, 預期 note", got)
+	}
+	// 來源整棵樹應保持不變.
+	if _, err := f.Stat(root + "/docs/notes.txt"); err != nil {
+		t.Fatalf("複製後來源檔案消失: %v", err)
+	}
+}
+
+func TestCopyAlreadyExists(t *testing.T) {
+	f := New()
+	root := setupTree(t)
+
+	if err := f.CopyContext(context.Background(), root+"/readme.txt", root+"/docs", false); err == nil {
+		t.Fatal("預期 overwrite 為偽且目標已存在時失敗")
+	} else if code := codeOf(t, err); code != fsb.ErrAlreadyExists {
+		t.Errorf("錯誤代碼 = %q, 預期 already_exists", code)
+	}
+	// 失敗不應動到既有的目標.
+	if _, err := f.Stat(root + "/docs/notes.txt"); err != nil {
+		t.Fatalf("失敗的複製動到了既有目標: %v", err)
+	}
+}
+
+func TestCopyOverwriteMerge(t *testing.T) {
+	f := New()
+	root := setupTree(t)
+
+	srcDir := root + "/src"
+	dstDir := root + "/dst"
+	if err := f.MakeDir(srcDir); err != nil {
+		t.Fatalf("建立來源目錄失敗: %v", err)
+	}
+	mustWrite(t, toOS(srcDir+"/a.txt"), "A")
+	if err := f.MakeDir(dstDir); err != nil {
+		t.Fatalf("建立目標目錄失敗: %v", err)
+	}
+	mustWrite(t, toOS(dstDir+"/a.txt"), "OLD")
+	mustWrite(t, toOS(dstDir+"/b.txt"), "B")
+
+	if err := f.CopyContext(context.Background(), srcDir, dstDir, true); err != nil {
+		t.Fatalf("CopyContext 失敗: %v", err)
+	}
+	// 合併語意 (計劃書第 5.4 節): 同名項目覆寫, 目標原有而來源沒有的成員保留.
+	if got := readFile(t, toOS(dstDir+"/a.txt")); got != "A" {
+		t.Errorf("a.txt 內容 = %q, 預期 A (覆寫後的來源內容)", got)
+	}
+	if got := readFile(t, toOS(dstDir+"/b.txt")); got != "B" {
+		t.Errorf("b.txt 內容 = %q, 預期 B (目標原有成員應保留)", got)
+	}
+}
+
+func TestMoveSourceGone(t *testing.T) {
+	f := New()
+	root := setupTree(t)
+
+	if err := f.MoveContext(context.Background(), root+"/readme.txt", root+"/moved.txt", false); err != nil {
+		t.Fatalf("MoveContext 失敗: %v", err)
+	}
+	if got := readFile(t, toOS(root+"/moved.txt")); got != "hello" {
+		t.Errorf("搬移後的內容 = %q, 預期 hello", got)
+	}
+	if code := codeOf(t, mustErr(f.Stat(root+"/readme.txt"))); code != fsb.ErrNotFound {
+		t.Errorf("搬移後來源的錯誤代碼 = %q, 預期 not_found", code)
+	}
+}
+
+func TestMoveOverwriteMerge(t *testing.T) {
+	f := New()
+	root := setupTree(t)
+
+	srcDir := root + "/msrc"
+	dstDir := root + "/mdst"
+	if err := f.MakeDir(srcDir); err != nil {
+		t.Fatalf("建立來源目錄失敗: %v", err)
+	}
+	mustWrite(t, toOS(srcDir+"/a.txt"), "A")
+	if err := f.MakeDir(dstDir); err != nil {
+		t.Fatalf("建立目標目錄失敗: %v", err)
+	}
+	mustWrite(t, toOS(dstDir+"/b.txt"), "B")
+
+	if err := f.MoveContext(context.Background(), srcDir, dstDir, true); err != nil {
+		t.Fatalf("MoveContext 失敗: %v", err)
+	}
+	if got := readFile(t, toOS(dstDir+"/a.txt")); got != "A" {
+		t.Errorf("a.txt 內容 = %q, 預期 A", got)
+	}
+	if got := readFile(t, toOS(dstDir+"/b.txt")); got != "B" {
+		t.Errorf("b.txt 內容 = %q, 預期 B (目標原有成員應保留)", got)
+	}
+	if code := codeOf(t, mustErr(f.Stat(srcDir))); code != fsb.ErrNotFound {
+		t.Errorf("搬移後來源目錄的錯誤代碼 = %q, 預期 not_found", code)
+	}
+}
+
+func TestCopyMoveCanceled(t *testing.T) {
+	f := New()
+	root := setupTree(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if err := f.CopyContext(ctx, root+"/readme.txt", root+"/canceled-copy.txt", false); !errors.Is(err, context.Canceled) {
+		t.Errorf("CopyContext 於已取消的 ctx 下回傳 %v, 預期滿足 errors.Is(_, context.Canceled)", err)
+	}
+	if _, err := os.Lstat(toOS(root + "/canceled-copy.txt")); err == nil {
+		t.Error("已取消的複製仍然寫入了目標")
+	}
+
+	if err := f.MoveContext(ctx, root+"/readme.txt", root+"/canceled-move.txt", false); !errors.Is(err, context.Canceled) {
+		t.Errorf("MoveContext 於已取消的 ctx 下回傳 %v, 預期滿足 errors.Is(_, context.Canceled)", err)
+	}
+	if _, err := f.Stat(root + "/readme.txt"); err != nil {
+		t.Errorf("已取消的搬移仍然動到了來源: %v", err)
+	}
+}

@@ -8,6 +8,7 @@ export type ErrorCode =
   | "already_exists"
   | "not_empty"
   | "disconnected"
+  | "canceled"
   | "io_error"
   | "unknown";
 
@@ -18,6 +19,7 @@ export const ERROR_CODES: readonly ErrorCode[] = Object.freeze([
   "already_exists",
   "not_empty",
   "disconnected",
+  "canceled",
   "io_error",
   "unknown",
 ]);
@@ -31,7 +33,10 @@ export type FsbOperation =
   | "pathStyle"
   | "makeDir"
   | "rename"
-  | "delete";
+  | "delete"
+  | "capabilities"
+  | "copy"
+  | "move";
 
 /** FsbError 是外拋給宿主與存放於狀態中的結構化錯誤 (純資料, 可直接序列化). */
 export interface FsbError {

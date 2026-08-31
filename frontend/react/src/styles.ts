@@ -137,6 +137,8 @@ export const FSB_STYLE_CSS = `
 .fsb-col-modified { width: 156px; text-align: right; }
 
 .fsb-list { flex: 1; overflow-y: auto; position: relative; min-height: 0; }
+/* 列表區域取得焦點時不顯示預設外框: 選取列本身的底色與左側色條已足以標示目前狀態 (計劃書第 5.2 節). */
+.fsb-list:focus { outline: none; }
 
 .fsb-row {
   display: flex;
@@ -156,6 +158,8 @@ export const FSB_STYLE_CSS = `
 .fsb-row.fsb-broken { opacity: 0.55; }
 .fsb-row.fsb-row-unselectable { opacity: 0.45; cursor: default; }
 .fsb-row.fsb-row-unselectable:hover { background: none; }
+/* 剪下狀態整列淡化, 透明度與隱藏項目 (0.45) 不同以便區分; 複製狀態不改變外觀. */
+.fsb-row.fsb-cut { opacity: 0.6; }
 
 .fsb-row-icon {
   width: 16px;
@@ -276,6 +280,14 @@ export const FSB_STYLE_CSS = `
   flex-shrink: 0;
   color: var(--fsb-accent);
 }
+/* 項目文字撐滿剩餘空間, 把快捷鍵欄位推向選單右側. */
+.fsb-menu-item-label { flex: 1; min-width: 0; }
+/* 快捷鍵欄位: 次要文字色, 無快捷鍵者留白, 由 label 的 flex: 1 帶出對齊. */
+.fsb-menu-item-shortcut {
+  flex-shrink: 0;
+  margin-left: 12px;
+  color: var(--fsb-text-secondary);
+}
 .fsb-menu-sep { height: 1px; margin: 4px 2px; background: var(--fsb-section-border); }
 
 .fsb-savename {
@@ -334,6 +346,10 @@ export const FSB_STYLE_CSS = `
   white-space: nowrap;
 }
 .fsb-status-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+/* 貼上衝突詢問一次排五個按鈕, 較既有確認條擁擠, 以較窄的間距與按鈕內距優先保證可點擊,
+   不換行不增高 (計劃書第 5.3, 5.8 節). */
+.fsb-status-actions.fsb-status-actions-compact { gap: 4px; }
+.fsb-status-actions-compact .fsb-action-btn { padding: 0 8px; }
 .fsb-status-dismiss {
   display: flex;
   align-items: center;

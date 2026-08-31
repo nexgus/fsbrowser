@@ -130,6 +130,27 @@ export function IconNewFolder(props: IconProps) {
   );
 }
 
+/** IconPaste 是工具列貼上按鈕圖示 (剪貼簿形). */
+export function IconPaste(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M6 2.75h4a.75.75 0 0 1 .75.75v1h-5.5v-1a.75.75 0 0 1 .75-.75z" />
+      <path d="M4.75 4.5h6.5c.55 0 1 .45 1 1v7.75c0 .55-.45 1-1 1h-6.5c-.55 0-1-.45-1-1V5.5c0-.55.45-1 1-1z" />
+      <path d="M6.2 8.2h3.6M6.2 10.6h3.6" />
+    </Svg>
+  );
+}
+
+/** IconRefresh 是工具列重新整理按鈕圖示 (環形箭頭). */
+export function IconRefresh(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M13 8A5 5 0 1 1 11.4 4.3" />
+      <path d="M13 2.5v3.3h-3.3" />
+    </Svg>
+  );
+}
+
 /** IconEye 是隱藏檔切換鈕圖示 (顯示中: 睜眼; 隱藏中: 加斜線). */
 export function IconEye(props: IconProps & { crossed?: boolean }) {
   const { crossed, ...rest } = props;

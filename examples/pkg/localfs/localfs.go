@@ -126,10 +126,16 @@ func (f *FS) Rename(oldPath, newPath string) error {
 	return nil
 }
 
-// Delete 刪除 path 所指的檔案或目錄. 不遞迴: 目錄非空時回報 not_empty.
+// Delete 刪除 path 所指的檔案或目錄; 目錄非空時連同其下所有內容一併遞迴刪除. 先以
+// os.Lstat (不解參考符號連結) 確認路徑存在, 不存在時仍走既有的 translate 函式回報
+// not_found, 確認存在後才呼叫 os.RemoveAll 整棵移除, 以維持既有的 not_found 語意.
 func (f *FS) Delete(p string) error {
 	internal := cleanInternal(p)
-	if err := os.Remove(toOS(internal)); err != nil {
+	osPath := toOS(internal)
+	if _, err := os.Lstat(osPath); err != nil {
+		return translate(err, internal)
+	}
+	if err := os.RemoveAll(osPath); err != nil {
 		return translate(err, internal)
 	}
 	return nil

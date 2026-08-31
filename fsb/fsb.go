@@ -4,6 +4,7 @@
 package fsb
 
 import (
+	"context"
 	"errors"
 	"time"
 )
@@ -68,6 +69,49 @@ const (
 	PathStyleWindows = "windows"
 )
 
+// 以下四個介面為選用能力 (計劃書第 3.1 節): FileSystem 既有八項必要操作維持不動,
+// 宿主可額外實作下列介面以取得遞迴複製與搬移功能; 橋接層以型別斷言偵測宿主實際滿足
+// 哪些介面, 未實作者由前端元件自動收斂對應的選單項目, 既有宿主不需改動任何程式碼即可
+// 繼續編譯與運作.
+
+// Copier 是選用的遞迴複製能力: 來源為目錄時, 由實作自行走訪整棵樹 (元件不遞迴, 也不
+// 取得檔案內容, 見計劃書第 2.2 節). overwrite 為 true 時, 目標已存在的同名項目一律
+// 覆寫 (含遞迴過程中遇到的每一層); 為 false 且目標已存在時, 回報 ErrAlreadyExists.
+type Copier interface {
+	Copy(src, dst string, overwrite bool) error
+}
+
+// CopierContext 是可取消的遞迴複製能力, 語意同 Copier, 另接受 context. 實作應於走訪
+// 過程中定期檢查 ctx.Err(), 中斷時回傳 ctx.Err(). 橋接層以 "是否實作本介面" 判斷宿主
+// 是否支援取消, 取消能力因此不另立獨立介面 (見計劃書第 3.1 節): 這樣能力宣告與實際
+// 遵守 context 的行為綁在一起, 不會出現宣告支援取消但走訪中不理會中斷的落差.
+type CopierContext interface {
+	CopyContext(ctx context.Context, src, dst string, overwrite bool) error
+}
+
+// Mover 是選用的搬移能力, 語意同 Copy, 但來源於成功後不再存在. 跨磁碟或跨檔案系統的
+// 搬移如何達成由實作決定. 宿主未提供本能力時, 前端改走退回路徑 (以既有的 Rename
+// 完成搬移), 因此剪下貼上對所有宿主皆可用; 複製沒有退回路徑, 因為既有八項操作裡沒有
+// 任何能搬動檔案內容的能力.
+type Mover interface {
+	Move(src, dst string, overwrite bool) error
+}
+
+// MoverContext 是可取消的搬移能力, 語意同 CopierContext 之於 Copier.
+type MoverContext interface {
+	MoveContext(ctx context.Context, src, dst string, overwrite bool) error
+}
+
+// Capabilities 描述宿主目前註冊的實作滿足哪些選用能力, 由橋接層 (service 套件) 型別
+// 斷言偵測後回傳給前端元件, 供其決定選單項目的顯示與否 (計劃書第 3.2 節). 三個欄位皆
+// 帶 json tag, 序列化後的欄位名為 canCopy / canMove / canCancel, 對齊前端 TypeScript
+// 端習慣的 camelCase 命名.
+type Capabilities struct {
+	CanCopy   bool `json:"canCopy"`   // 是否滿足 Copier 或 CopierContext 任一介面
+	CanMove   bool `json:"canMove"`   // 是否滿足 Mover 或 MoverContext 任一介面
+	CanCancel bool `json:"canCancel"` // 是否至少一項具備可取消版本 (CopierContext 或 MoverContext)
+}
+
 // ErrorCode 是結構化錯誤的代碼列舉 (第 4.3 節). 此集合為介面首版凍結範圍, 供前端
 // 元件選用對應語言包詞條, 亦供宿主分流處理; 不得任意增減.
 type ErrorCode string
@@ -80,6 +124,7 @@ const (
 	ErrDisconnected     ErrorCode = "disconnected"      // 底層連線已中斷
 	ErrIO               ErrorCode = "io_error"          // 其他輸入輸出錯誤
 	ErrUnknown          ErrorCode = "unknown"           // 無法歸類的錯誤
+	ErrCanceled         ErrorCode = "canceled"          // 作業因取消而中斷 (計劃書第 3.3 節)
 )
 
 // Error 是檔案操作介面實作應回報的結構化錯誤: 錯誤代碼 (供程式判斷與選字) + 人類可讀

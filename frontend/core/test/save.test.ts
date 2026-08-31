@@ -186,6 +186,48 @@ describe("存檔模式: 檔名輸入列", () => {
     expect(store.getSnapshot().saveName).toBe("a.txt");
   });
 
+  it("以 Ctrl / Cmd 點選選中檔案時同樣把檔名帶入輸入列, 以最後點到的為準; 取消選取不改動", async () => {
+    const store = await readyStore({ selectionMode: "save" });
+    store.toggleSelection(path("a.txt"));
+    expect(store.getSnapshot().selection).toEqual([path("a.txt")]);
+    expect(store.getSnapshot().saveName).toBe("a.txt");
+
+    // 再以 Ctrl 點選另一檔案: 累積選取, 檔名以最後點到的為準.
+    store.toggleSelection(path("c.TXT"));
+    expect(store.getSnapshot().selection).toEqual([path("a.txt"), path("c.TXT")]);
+    expect(store.getSnapshot().saveName).toBe("c.TXT");
+
+    // 取消選取 c.TXT: 選取集減少, 但輸入列維持原檔名不變.
+    store.toggleSelection(path("c.TXT"));
+    expect(store.getSnapshot().selection).toEqual([path("a.txt")]);
+    expect(store.getSnapshot().saveName).toBe("c.TXT");
+  });
+
+  it("以 Ctrl / Cmd 點選目錄或淡化項目時不影響檔名輸入列", async () => {
+    const store = await readyStore({ selectionMode: "save", extensions: ["txt"] });
+    store.toggleSelection(path("a.txt"));
+    expect(store.getSnapshot().saveName).toBe("a.txt");
+
+    store.toggleSelection(path("docs"));
+    expect(store.getSnapshot().saveName).toBe("a.txt");
+
+    // b.md 為淡化項目, 點選無動作.
+    store.toggleSelection(path("b.md"));
+    // 選取集依可見順序排列 (docs 排在 a.txt 之前), 與點選順序無關.
+    expect(store.getSnapshot().selection).toEqual([path("docs"), path("a.txt")]);
+    expect(store.getSnapshot().saveName).toBe("a.txt");
+  });
+
+  it("Shift 範圍選不帶入檔名", async () => {
+    const store = await readyStore({ selectionMode: "save", returnMode: "multiple" });
+    store.selectOnly(path("a.txt"));
+    expect(store.getSnapshot().saveName).toBe("a.txt");
+    store.setSaveName("custom.txt");
+    store.selectRange(path("readme"));
+    expect(store.getSnapshot().selection.length).toBeGreaterThan(1);
+    expect(store.getSnapshot().saveName).toBe("custom.txt");
+  });
+
   it("導覽切換目錄時保留檔名不清空", async () => {
     const store = await readyStore({ selectionMode: "save" });
     store.setSaveName("draft.txt");

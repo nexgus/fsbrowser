@@ -2,8 +2,8 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createBrowserStore } from "@nexgus/fsb-core";
-import type { BrowserStore, BrowserStoreOptions } from "@nexgus/fsb-core";
-import type { MockClient, MockEntry } from "./mockClient.js";
+import type { BrowserStore, BrowserStoreOptions, PasteConflictChoice } from "@nexgus/fsb-core";
+import type { MockClient, MockClientOptions, MockEntry } from "./mockClient.js";
 import { createMockClient } from "./mockClient.js";
 
 const HOME = "/home/gus";
@@ -51,6 +51,72 @@ const path = (name: string): string => `${HOME}/${name}`;
 beforeEach(() => {
   client = createMockClient({ tree: makeTree(), home: HOME, roots: ["/"] });
 });
+
+// --- 剪貼與貼上 (計劃書第 5 章) 測試用具 ---
+
+const destPath = (name: string): string => `${HOME}/dest/${name}`;
+
+/**
+ * makeClipboardTree 建立剪貼測試專用的目錄表, 與 makeTree() 分開以免影響既有測試對
+ * makeTree() 精確排序結果的斷言. dest 目錄的初始內容由呼叫端指定, 供衝突情境使用.
+ */
+function makeClipboardTree(destEntries: MockEntry[] = []): Record<string, MockEntry[]> {
+  return {
+    "/": [{ name: "home", kind: "dir" }],
+    "/home": [{ name: "gus", kind: "dir" }],
+    [HOME]: [
+      { name: "src", kind: "dir" },
+      { name: "dest", kind: "dir" },
+      { name: "a.txt", kind: "file" },
+      { name: "b.txt", kind: "file" },
+      { name: "c.txt", kind: "file" },
+      { name: "new.txt", kind: "file" },
+    ],
+    [`${HOME}/src`]: [{ name: "inner.txt", kind: "file" }],
+    [`${HOME}/dest`]: destEntries,
+  };
+}
+
+function makeClipboardClient(
+  options: Partial<Pick<MockClientOptions, "canCopy" | "canMove" | "canCancel">> & {
+    destEntries?: MockEntry[];
+  } = {},
+): MockClient {
+  const { destEntries, ...capabilityOptions } = options;
+  return createMockClient({
+    tree: makeClipboardTree(destEntries ?? []),
+    home: HOME,
+    roots: ["/"],
+    ...capabilityOptions,
+  });
+}
+
+/**
+ * driveConflicts 監看貼上流程中出現的同名衝突, 依序以給定的選項作答. 作答刻意延後一個
+ * 微任務執行: askConflict() 於 emit() 之後才設立等待中的回呼, 若在監聽者內同步作答,
+ * 該次回呼尚未設立, 作答會被靜默忽略而使貼上流程永遠卡住. answers 用盡後一律以
+ * "cancel" 收尾, 避免遺漏情境時整條批次卡死.
+ */
+function driveConflicts(
+  store: BrowserStore,
+  answers: readonly PasteConflictChoice[],
+): { unsubscribe: () => void; askCount: () => number } {
+  let index = 0;
+  let askCount = 0;
+  let waiting = false;
+  const unsubscribe = store.subscribe(() => {
+    if (waiting || store.getSnapshot().pasteConflict === null) return;
+    waiting = true;
+    askCount += 1;
+    const choice = answers[index] ?? "cancel";
+    index += 1;
+    queueMicrotask(() => {
+      waiting = false;
+      store.resolvePasteConflict(choice);
+    });
+  });
+  return { unsubscribe, askCount: () => askCount };
+}
 
 describe("初始化與導覽", () => {
   it("未提供起始目錄時用家目錄, 並取得路徑風格與根清單", async () => {
@@ -176,13 +242,26 @@ describe("選取", () => {
     expect(store.getSnapshot().selection).toEqual([path("c.txt")]);
   });
 
-  it("單選模式的 Ctrl 點選不累積", async () => {
+  it("單選模式下 Ctrl 點選可累積多項", async () => {
     const store = await readyStore();
     store.selectOnly(path("a.txt"));
     store.toggleSelection(path("b.txt"));
+    expect(store.getSnapshot().selection).toEqual([path("a.txt"), path("b.txt")]);
+    store.toggleSelection(path("a.txt"));
     expect(store.getSnapshot().selection).toEqual([path("b.txt")]);
-    store.toggleSelection(path("b.txt"));
-    expect(store.getSnapshot().selection).toEqual([]);
+  });
+
+  it("單選模式下 Shift 範圍選可選出連續多項", async () => {
+    const store = await readyStore();
+    // 可見順序: docs, link-dir, pics, a.txt, b.txt, broken, c.txt, sock
+    store.selectOnly(path("link-dir"));
+    store.selectRange(path("b.txt"));
+    expect(store.getSnapshot().selection).toEqual([
+      path("link-dir"),
+      path("pics"),
+      path("a.txt"),
+      path("b.txt"),
+    ]);
   });
 
   it("Shift 範圍選以錨點為起點, 且順序與列表一致", async () => {
@@ -264,6 +343,17 @@ describe("確認選定結果", () => {
     expect(multiple.getSnapshot().canConfirmSelection).toBe(true);
     multiple.confirmSelection();
     expect(onSelect).toHaveBeenCalledWith([path("a.txt"), path("c.txt")]);
+  });
+
+  it("單選模式下選取多項時不可確認, 收回成一項後恢復可確認", async () => {
+    const store = await readyStore();
+    store.selectOnly(path("a.txt"));
+    store.toggleSelection(path("b.txt"));
+    expect(store.getSnapshot().selectedCount).toBe(2);
+    expect(store.getSnapshot().canConfirmSelection).toBe(false);
+    store.toggleSelection(path("b.txt"));
+    expect(store.getSnapshot().selectedCount).toBe(1);
+    expect(store.getSnapshot().canConfirmSelection).toBe(true);
   });
 
   it("取消呼叫 onCancel", async () => {
@@ -483,5 +573,436 @@ describe("錯誤狀態", () => {
       operation: "list",
       path: HOME,
     });
+  });
+});
+
+describe("剪貼與貼上: 能力與選單收斂", () => {
+  it("快照反映宿主查詢到的能力", async () => {
+    client = makeClipboardClient({ canCopy: false, canMove: false, canCancel: false });
+    const store = await readyStore();
+    expect(store.getSnapshot().capabilities).toEqual({
+      canCopy: false,
+      canMove: false,
+      canCancel: false,
+    });
+  });
+
+  it("無複製能力時複製動作不建立剪貼內容", async () => {
+    client = makeClipboardClient({ canCopy: false });
+    const store = await readyStore();
+    store.selectOnly(path("a.txt"));
+    store.copy();
+    expect(store.getSnapshot().clipboard).toBeNull();
+  });
+
+  // 以下兩則對應 2026-08-31 裁決: 宿主未提供複製能力時剪下, 複製, 貼上三項一律不提供
+  // (三項同進退, 避免出現剪得走卻無處可貼上的狀態).
+
+  it("無複製能力時剪下動作不建立剪貼內容", async () => {
+    client = makeClipboardClient({ canCopy: false });
+    const store = await readyStore();
+    store.selectOnly(path("a.txt"));
+    store.cut();
+    expect(store.getSnapshot().clipboard).toBeNull();
+  });
+
+  it("無複製能力時可貼上判定恆為否", async () => {
+    client = makeClipboardClient({ canCopy: false });
+    const store = await readyStore();
+    store.selectOnly(path("a.txt"));
+    store.cut();
+    store.copy();
+    expect(store.getSnapshot().canPaste).toBe(false);
+  });
+
+  it("無搬移能力時剪下仍可用 (退回路徑), 貼上可執行判定不受影響", async () => {
+    client = makeClipboardClient({ canMove: false });
+    const store = await readyStore();
+    store.selectOnly(path("a.txt"));
+    store.cut();
+    expect(store.getSnapshot().clipboard?.mode).toBe("cut");
+    expect(store.getSnapshot().canPaste).toBe(true);
+  });
+
+  it("剪貼內容為空時貼上不可執行", async () => {
+    client = makeClipboardClient();
+    const store = await readyStore();
+    expect(store.getSnapshot().clipboard).toBeNull();
+    expect(store.getSnapshot().canPaste).toBe(false);
+  });
+});
+
+describe("剪貼與貼上: 正常流程", () => {
+  it("剪下貼上正常結束後清除剪貼內容, 並選取本次成功產生的項目", async () => {
+    client = makeClipboardClient();
+    const store = await readyStore();
+    store.selectOnly(path("a.txt"));
+    store.cut();
+    await store.navigateTo(path("dest"));
+    await store.paste();
+
+    expect(client.moveCalls).toEqual([{ src: path("a.txt"), dst: destPath("a.txt"), overwrite: false }]);
+    expect(store.getSnapshot().clipboard).toBeNull();
+    expect(store.getSnapshot().pasteOutcome?.reason).toBe("completed");
+    expect(store.getSnapshot().selection).toEqual([destPath("a.txt")]);
+    expect(names(store)).toContain("a.txt");
+  });
+
+  it("複製貼上正常結束後保留剪貼內容, 可連續貼上", async () => {
+    client = makeClipboardClient();
+    const store = await readyStore();
+    store.selectOnly(path("b.txt"));
+    store.copy();
+    await store.navigateTo(path("dest"));
+    await store.paste();
+
+    expect(client.copyCalls).toEqual([{ src: path("b.txt"), dst: destPath("b.txt"), overwrite: false }]);
+    expect(store.getSnapshot().clipboard?.mode).toBe("copy");
+
+    // 複製內容保留, 可再貼一次; 此時目標已存在, 進入同名衝突.
+    const driver = driveConflicts(store, ["overwrite"]);
+    await store.paste();
+    driver.unsubscribe();
+
+    expect(driver.askCount()).toBe(1);
+    expect(client.copyCalls).toHaveLength(2);
+    expect(client.copyCalls[1]).toEqual({ src: path("b.txt"), dst: destPath("b.txt"), overwrite: true });
+  });
+});
+
+describe("剪貼與貼上: 同名衝突", () => {
+  it("覆寫與全部覆寫: 全部只套用於本批次後續項目", async () => {
+    client = makeClipboardClient({
+      destEntries: [
+        { name: "a.txt", kind: "file" },
+        { name: "b.txt", kind: "file" },
+        { name: "c.txt", kind: "file" },
+      ],
+    });
+    const store = await readyStore({ returnMode: "multiple" });
+    store.selectOnly(path("a.txt"));
+    store.toggleSelection(path("b.txt"));
+    store.toggleSelection(path("c.txt"));
+    store.copy();
+    await store.navigateTo(path("dest"));
+
+    const driver = driveConflicts(store, ["overwrite", "overwriteAll"]);
+    await store.paste();
+    driver.unsubscribe();
+
+    expect(driver.askCount()).toBe(2);
+    expect(client.copyCalls.map((call) => call.overwrite)).toEqual([true, true, true]);
+    expect(store.getSnapshot().pasteOutcome).toEqual({
+      reason: "completed",
+      done: 3,
+      count: 3,
+      name: "",
+      failures: [],
+    });
+  });
+
+  it("略過與全部略過, 全部的決定不跨貼上批次沿用", async () => {
+    client = makeClipboardClient({
+      destEntries: [
+        { name: "a.txt", kind: "file" },
+        { name: "b.txt", kind: "file" },
+        { name: "c.txt", kind: "file" },
+      ],
+    });
+    const store = await readyStore({ returnMode: "multiple" });
+    store.selectOnly(path("a.txt"));
+    store.toggleSelection(path("b.txt"));
+    store.toggleSelection(path("c.txt"));
+    store.copy();
+    await store.navigateTo(path("dest"));
+
+    const driver = driveConflicts(store, ["skip", "skipAll"]);
+    await store.paste();
+    driver.unsubscribe();
+
+    expect(driver.askCount()).toBe(2);
+    expect(client.copyCalls).toEqual([]);
+    expect(store.getSnapshot().pasteOutcome).toEqual({
+      reason: "completed",
+      done: 3,
+      count: 3,
+      name: "",
+      failures: [],
+    });
+    // 複製內容保留, 目標目錄仍是衝突前的樣子 (全數略過).
+    expect(store.getSnapshot().clipboard).not.toBeNull();
+
+    // 全部的決定只在上一批次內生效: 這一批次重新對每一項提問, 而非沿用先前的 "全部略過".
+    const secondDriver = driveConflicts(store, ["overwrite", "overwrite", "overwrite"]);
+    await store.paste();
+    secondDriver.unsubscribe();
+
+    expect(secondDriver.askCount()).toBe(3);
+    expect(client.copyCalls).toHaveLength(3);
+  });
+
+  it("衝突中選擇取消時立即中止整個貼上批次", async () => {
+    client = makeClipboardClient({
+      destEntries: [
+        { name: "a.txt", kind: "file" },
+        { name: "b.txt", kind: "file" },
+      ],
+    });
+    const store = await readyStore({ returnMode: "multiple" });
+    store.selectOnly(path("a.txt"));
+    store.toggleSelection(path("b.txt"));
+    store.cut();
+    await store.navigateTo(path("dest"));
+
+    const driver = driveConflicts(store, ["cancel"]);
+    await store.paste();
+    driver.unsubscribe();
+
+    expect(driver.askCount()).toBe(1);
+    expect(client.moveCalls).toEqual([]);
+    expect(store.getSnapshot().pasteOutcome?.reason).toBe("canceled");
+    // 剪下模式取消後剪貼內容比照斷線處理: 保留.
+    expect(store.getSnapshot().clipboard).not.toBeNull();
+  });
+});
+
+describe("剪貼與貼上: 嵌套防護", () => {
+  it("命中嵌套的項目擋下且不呼叫宿主, 其餘項目照常完成, 以警告回呼外拋而不進狀態列", async () => {
+    const onWarning = vi.fn();
+    client = makeClipboardClient();
+    const store = await readyStore({ returnMode: "multiple", onWarning });
+    store.selectOnly(path("src"));
+    store.toggleSelection(path("a.txt"));
+    store.cut();
+    // 目標即來源之一 (src) 本身: 對 src 而言是嵌套, 對 a.txt 而言不是.
+    await store.navigateTo(path("src"));
+
+    await store.paste();
+
+    expect(onWarning).toHaveBeenCalledWith({
+      code: "nestedPaste",
+      paths: [path("src")],
+      targetDir: path("src"),
+    });
+    expect(client.moveCalls.map((call) => call.src)).toEqual([path("a.txt")]);
+    const outcome = store.getSnapshot().pasteOutcome;
+    expect(outcome?.reason).toBe("completed");
+    expect(outcome?.failures).toEqual([]);
+    expect(store.getSnapshot().error).toBeNull();
+    expect(store.getSnapshot().clipboard).toBeNull();
+  });
+
+  it("Windows 路徑風格下, 目標與來源僅大小寫不同仍視為嵌套", async () => {
+    client = createMockClient({
+      tree: {
+        "C:/": [{ name: "Data", kind: "dir" }],
+        "C:/Data": [{ name: "Sub", kind: "dir" }],
+        "C:/Data/Sub": [],
+        // 另一種大小寫寫法, 模擬 Windows 檔案系統本身不分大小寫, 兩種寫法解析到同一位置.
+        "C:/DATA/Sub": [],
+      },
+      home: "C:/",
+      roots: ["C:/"],
+      pathStyle: "windows",
+    });
+    const onWarning = vi.fn();
+    const store = await readyStore({ onWarning });
+    store.selectOnly("C:/Data");
+    store.cut();
+    await store.navigateTo("C:/DATA/Sub");
+
+    await store.paste();
+
+    expect(onWarning).toHaveBeenCalledWith({
+      code: "nestedPaste",
+      paths: ["C:/Data"],
+      targetDir: "C:/DATA/Sub",
+    });
+    expect(client.moveCalls).toEqual([]);
+    expect(store.getSnapshot().pasteOutcome).toEqual({
+      reason: "completed",
+      done: 1,
+      count: 1,
+      name: "",
+      failures: [],
+    });
+    expect(store.getSnapshot().clipboard).toBeNull();
+  });
+
+  it("貼到來源的父目錄 (原地複製) 不屬於嵌套, 照常走同名衝突流程", async () => {
+    client = makeClipboardClient();
+    const store = await readyStore();
+    store.selectOnly(path("a.txt"));
+    store.copy();
+
+    const driver = driveConflicts(store, ["overwrite"]);
+    await store.paste();
+    driver.unsubscribe();
+
+    expect(driver.askCount()).toBe(1);
+    expect(client.copyCalls).toEqual([{ src: path("a.txt"), dst: path("a.txt"), overwrite: true }]);
+  });
+});
+
+describe("剪貼與貼上: 種類不符", () => {
+  it("目標存在且種類不同時直接拒絕該項且不詢問", async () => {
+    const onWarning = vi.fn();
+    client = makeClipboardClient({
+      destEntries: [{ name: "a.txt", kind: "dir" }],
+    });
+    const store = await readyStore({ onWarning });
+    store.selectOnly(path("a.txt"));
+    store.copy();
+    await store.navigateTo(path("dest"));
+
+    // 若真的被詢問, 這裡會誤答覆寫; 藉此偵測是否真的完全不問.
+    const driver = driveConflicts(store, ["overwrite"]);
+    await store.paste();
+    driver.unsubscribe();
+
+    expect(driver.askCount()).toBe(0);
+    expect(client.copyCalls).toEqual([]);
+    expect(onWarning).not.toHaveBeenCalled();
+
+    const outcome = store.getSnapshot().pasteOutcome;
+    expect(outcome?.failures).toEqual([
+      { path: path("a.txt"), name: "a.txt", reason: "typeMismatch", error: null },
+    ]);
+    // 種類不符沒有對應的錯誤代碼, 且已有專屬的狀態列說明 (第 6 章), 故不另設錯誤; 該
+    // 情形由狀態列的批次結果型態呈現.
+    expect(store.getSnapshot().error).toBeNull();
+  });
+});
+
+describe("剪貼與貼上: 退回路徑 (無搬移能力)", () => {
+  it("以重新命名完成剪下貼上, 目標已存在時記為失敗且不提供覆寫", async () => {
+    client = makeClipboardClient({
+      canMove: false,
+      destEntries: [{ name: "b.txt", kind: "file" }],
+    });
+    const store = await readyStore({ returnMode: "multiple" });
+    store.selectOnly(path("new.txt"));
+    store.toggleSelection(path("b.txt"));
+    store.cut();
+    await store.navigateTo(path("dest"));
+
+    await store.paste();
+
+    // 成功項透過既有的 Rename 完成 (退回路徑), 全程未呼叫 Move.
+    expect(client.calls).toContain(`rename:${path("new.txt")}`);
+    expect(client.calls).not.toContain(`rename:${path("b.txt")}`);
+    expect(client.moveCalls).toEqual([]);
+
+    expect(store.getSnapshot().pasteOutcome).toEqual({
+      reason: "completed",
+      done: 2,
+      count: 2,
+      name: "",
+      failures: [
+        {
+          path: path("b.txt"),
+          name: "b.txt",
+          reason: "error",
+          error: { code: "already_exists", message: "", operation: "rename", path: destPath("b.txt") },
+        },
+      ],
+    });
+    expect(store.getSnapshot().error?.code).toBe("already_exists");
+    expect(store.getSnapshot().clipboard).toBeNull();
+    expect(names(store)).toContain("new.txt");
+    expect(names(store)).toContain("b.txt");
+  });
+});
+
+describe("剪貼與貼上: 取消", () => {
+  it("取消進行中作業: 已完成部分保留, 剪貼內容保留, 批次收場為取消", async () => {
+    client = makeClipboardClient();
+    const store = await readyStore({ returnMode: "multiple" });
+    store.selectOnly(path("a.txt"));
+    store.toggleSelection(path("b.txt"));
+    store.cut();
+    await store.navigateTo(path("dest"));
+
+    const unsubscribe = store.subscribe(() => {
+      const progress = store.getSnapshot().pasteProgress;
+      if (progress?.canCancel === true && progress.current === 2) {
+        store.cancelPaste();
+      }
+    });
+    await store.paste();
+    unsubscribe();
+
+    expect(store.getSnapshot().pasteOutcome).toEqual({
+      reason: "canceled",
+      done: 1,
+      count: 2,
+      name: "",
+      failures: [],
+    });
+    expect(client.moveCalls.map((call) => call.src)).toEqual([path("a.txt"), path("b.txt")]);
+    // 已完成的部分保留 (重新整理清單後看得到 a.txt 已在目標目錄); 剪貼內容比照斷線處理: 保留.
+    expect(names(store)).toContain("a.txt");
+    expect(store.getSnapshot().clipboard).not.toBeNull();
+  });
+
+  it("無取消能力時進行中作業不提供取消, cancelPaste 呼叫無作用", async () => {
+    client = makeClipboardClient({ canCancel: false });
+    const store = await readyStore();
+    store.selectOnly(path("a.txt"));
+    store.cut();
+    await store.navigateTo(path("dest"));
+
+    let capturedCanCancel: boolean | null = null;
+    const unsubscribe = store.subscribe(() => {
+      const progress = store.getSnapshot().pasteProgress;
+      if (progress !== null && capturedCanCancel === null) {
+        capturedCanCancel = progress.canCancel;
+        store.cancelPaste();
+      }
+    });
+    await store.paste();
+    unsubscribe();
+
+    expect(capturedCanCancel).toBe(false);
+    expect(store.getSnapshot().pasteOutcome?.reason).toBe("completed");
+    expect(client.moveCalls).toHaveLength(1);
+  });
+});
+
+describe("剪貼與貼上: 斷線", () => {
+  it("斷線立即停止批次, 不重新整理清單, 剪貼內容保留", async () => {
+    const onError = vi.fn();
+    client = makeClipboardClient();
+    client.failures.set(`move:${path("b.txt")}`, { code: "disconnected", message: "connection lost" });
+    const store = await readyStore({ returnMode: "multiple", onError });
+    store.selectOnly(path("a.txt"));
+    store.toggleSelection(path("b.txt"));
+    store.toggleSelection(path("c.txt"));
+    store.cut();
+    await store.navigateTo(path("dest"));
+
+    await store.paste();
+
+    // c.txt 從未被嘗試: 斷線後立即停止批次, 不再嘗試剩餘項目.
+    expect(client.moveCalls.map((call) => call.src)).toEqual([path("a.txt"), path("b.txt")]);
+    expect(store.getSnapshot().pasteOutcome).toEqual({
+      reason: "disconnected",
+      done: 1,
+      count: 3,
+      name: "b.txt",
+      failures: [],
+    });
+    expect(onError).toHaveBeenCalledWith({
+      code: "disconnected",
+      message: "connection lost",
+      operation: "move",
+      path: path("b.txt"),
+    });
+    // 結構化錯誤僅外拋給宿主, 不寫入狀態列 (避免與 pasteOutcome 的說明重複).
+    expect(store.getSnapshot().error).toBeNull();
+    // 斷線後清單不自動重新整理: a.txt 雖已實際搬移, 畫面仍維持斷線前的樣子.
+    expect(names(store)).not.toContain("a.txt");
+    expect(store.getSnapshot().clipboard).not.toBeNull();
+    expect(store.getSnapshot().pasting).toBe(false);
   });
 });

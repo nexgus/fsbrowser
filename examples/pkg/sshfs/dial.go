@@ -2,6 +2,7 @@ package sshfs
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -245,6 +246,13 @@ func (r *clientRunner) Run(cmd string) ([]byte, []byte, int, error) {
 
 // exec 開一個 session 執行指令並收集輸出; 指令非 0 結束碼不視為錯誤, 改以結束碼回報.
 func (r *clientRunner) exec(cmd string) ([]byte, []byte, int, error) {
+	return r.execWithSession(cmd, nil)
+}
+
+// execWithSession 同 exec, 但在 session 建立後立即透過 sessionCh 送出該 session, 供
+// 呼叫端 (見 RunContext) 於取消時據以呼叫 Close() 中止指令; sessionCh 需有緩衝空間,
+// 傳入 nil 或呼叫端不讀取時本函式皆不因送出而阻塞.
+func (r *clientRunner) execWithSession(cmd string, sessionCh chan<- *ssh.Session) ([]byte, []byte, int, error) {
 	r.mu.Lock()
 	client := r.client
 	r.mu.Unlock()
@@ -257,6 +265,11 @@ func (r *clientRunner) exec(cmd string) ([]byte, []byte, int, error) {
 		return nil, nil, 0, err
 	}
 	defer session.Close()
+
+	select {
+	case sessionCh <- session:
+	default:
+	}
 
 	var outBuf, errBuf bytes.Buffer
 	session.Stdout = &outBuf
@@ -272,4 +285,38 @@ func (r *clientRunner) exec(cmd string) ([]byte, []byte, int, error) {
 		return outBuf.Bytes(), errBuf.Bytes(), exitErr.ExitStatus(), nil
 	}
 	return outBuf.Bytes(), errBuf.Bytes(), 0, err
+}
+
+// RunContext 同 Run, 但以 ctx 取代 opTimeout 控制執行時間上限, 供複製, 搬移等可能
+// 耗時的操作使用, 使其不受該固定上限限制. ctx 被取消時關閉指令所在的 session 以中止
+// 遠端行程 (關閉 SSH channel 使遠端 shell 收到 EOF / SIGHUP 而終止其執行中的子行程,
+// 是否確實終止仍取決於該行程是否攔截該訊號, 為儘力而為的中止手段), 並回傳 ctx.Err().
+func (r *clientRunner) RunContext(ctx context.Context, cmd string) ([]byte, []byte, int, error) {
+	type result struct {
+		stdout, stderr []byte
+		exit           int
+		err            error
+	}
+	ch := make(chan result, 1)
+	sessCh := make(chan *ssh.Session, 1)
+	go func() {
+		stdout, stderr, exit, err := r.execWithSession(cmd, sessCh)
+		ch <- result{stdout, stderr, exit, err}
+	}()
+
+	select {
+	case res := <-ch:
+		return res.stdout, res.stderr, res.exit, res.err
+	case <-ctx.Done():
+		// 等待 session 建立完成 (或執行已提前結束, 例如 NewSession 失敗) 再決定是否
+		// 需要關閉, 避免競態下漏關已建立的 session; 背景 goroutine 之後仍會把結果送進
+		// 有緩衝的 ch, 此處不等待, 任其自然結束並由 GC 回收.
+		select {
+		case s := <-sessCh:
+			_ = s.Close()
+		case res := <-ch:
+			return res.stdout, res.stderr, res.exit, res.err
+		}
+		return nil, nil, 0, ctx.Err()
+	}
 }

@@ -110,6 +110,36 @@ export function fromDisplayPath(input: string): string {
 }
 
 /**
+ * comparablePath 把路徑轉為比較用形式: 先正規化為內部形式, Windows 風格再轉為小寫.
+ *
+ * Windows 風格的檔案系統本身不區分大小寫, 區分大小寫的比較會讓以路徑為據的防護在使用者
+ * 只改動大小寫時整個失效 (第 5.5 節).
+ */
+function comparablePath(path: string, style: PathStyle): string {
+  const normalized = normalizePath(path);
+  return style === "windows" ? normalized.toLowerCase() : normalized;
+}
+
+/** pathEquals 判斷兩個路徑是否指向同一位置; 比較規則見 comparablePath. */
+export function pathEquals(a: string, b: string, style: PathStyle): boolean {
+  return comparablePath(a, style) === comparablePath(b, style);
+}
+
+/**
+ * isInsidePath 判斷 target 是否即為 ancestor 本身或位於 ancestor 之內 (以 "ancestor +
+ * 分隔符" 為前綴). 供嵌套貼上的防護使用 (第 5.5 節): 判定一律以路徑字串為準, 不以使用者
+ * 在畫面上的操作位置判斷, 因為同一個目錄可經由不同途徑抵達, 只有路徑是可靠依據.
+ */
+export function isInsidePath(target: string, ancestor: string, style: PathStyle): boolean {
+  const parent = comparablePath(ancestor, style);
+  if (parent === "") return false;
+  const child = comparablePath(target, style);
+  if (child === parent) return true;
+  // 根 ("/" 或 "C:/") 本身已帶結尾分隔符, 再補一個會變成不可能命中的雙分隔符前綴.
+  return child.startsWith(parent.endsWith("/") ? parent : `${parent}/`);
+}
+
+/**
  * isValidName 檢查單一項目名稱是否可用於建立目錄或重新命名: 不可為空, 不可含分隔符,
  * 不可為 "." 或 "..".
  */

@@ -30,6 +30,7 @@ export function useBrowserStore(options: BrowserStoreOptions): UseBrowserStoreRe
       onSelect: (result) => callbacksRef.current.onSelect?.(result),
       onCancel: () => callbacksRef.current.onCancel?.(),
       onError: (error) => callbacksRef.current.onError?.(error),
+      onWarning: (warning) => callbacksRef.current.onWarning?.(warning),
     };
     return createBrowserStore(stable);
     // eslint-disable-next-line react-hooks/exhaustive-deps

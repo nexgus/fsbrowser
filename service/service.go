@@ -3,6 +3,8 @@
 package service
 
 import (
+	"context"
+	"errors"
 	"sync"
 
 	"github.com/nexgus/fsbrowser/fsb"
@@ -70,6 +72,21 @@ func wrap(err error) error {
 	return fe
 }
 
+// wrapCancelable 供 Copy / Move 兩個支援 context 取消的方法使用: 先判斷 err 是否為
+// context 取消所致 (context.Canceled 或 context.DeadlineExceeded), 是則歸類為
+// fsb.ErrCanceled (計劃書第 3.3 節); 否則沿用既有的 wrap 正規化流程, 宿主若已自行回報
+// *fsb.Error (含直接回報 ErrCanceled 的情形) 亦原樣保留. 既有八項必要操作不涉及
+// context, 不套用本函式.
+func wrapCancelable(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return fsb.NewError(fsb.ErrCanceled, err.Error())
+	}
+	return wrap(err)
+}
+
 // List 列出 dir 目錄的內容.
 func (s *Service) List(dir string) ([]fsb.Entry, error) {
 	entries, err := s.current().List(dir)
@@ -113,4 +130,50 @@ func (s *Service) Rename(oldPath, newPath string) error {
 // Delete 刪除檔案或目錄.
 func (s *Service) Delete(path string) error {
 	return wrap(s.current().Delete(path))
+}
+
+// Capabilities 回傳目前註冊的實作滿足哪些選用能力 (計劃書第 3.1, 3.2 節): 以型別斷言
+// 偵測 current() 取得的實作是否滿足 Copier / CopierContext / Mover / MoverContext
+// 四個選用介面, 不快取結果, 故宿主於執行期以 SetFileSystem 抽換實作後, 下一次查詢即
+// 反映新實作的能力.
+func (s *Service) Capabilities() fsb.Capabilities {
+	cur := s.current()
+	_, copier := cur.(fsb.Copier)
+	_, copierCtx := cur.(fsb.CopierContext)
+	_, mover := cur.(fsb.Mover)
+	_, moverCtx := cur.(fsb.MoverContext)
+	return fsb.Capabilities{
+		CanCopy:   copier || copierCtx,
+		CanMove:   mover || moverCtx,
+		CanCancel: copierCtx || moverCtx,
+	}
+}
+
+// Copy 轉呼叫宿主的複製能力 (計劃書第 3.2 節). 實作同時滿足 CopierContext 與 Copier
+// 兩者時優先採用前者, 把 ctx 轉交給宿主以便走訪過程中檢查取消; 只滿足 Copier 時 ctx
+// 被忽略. 宿主未提供複製能力時回報 fsb.ErrUnknown 並附明確訊息 -- 正常情況下元件不會
+// 呼叫到本方法, 因為前端已依 Capabilities 的查詢結果隱藏對應的選單項目.
+func (s *Service) Copy(ctx context.Context, src, dst string, overwrite bool) error {
+	cur := s.current()
+	if c, ok := cur.(fsb.CopierContext); ok {
+		return wrapCancelable(c.CopyContext(ctx, src, dst, overwrite))
+	}
+	if c, ok := cur.(fsb.Copier); ok {
+		return wrap(c.Copy(src, dst, overwrite))
+	}
+	return fsb.NewError(fsb.ErrUnknown, "目前的檔案操作實作未提供複製能力 (未實作 fsb.Copier 或 fsb.CopierContext)")
+}
+
+// Move 轉呼叫宿主的搬移能力, 優先序與 ctx 處理方式同 Copy. 宿主未提供搬移能力時回報
+// fsb.ErrUnknown 並附明確訊息; 元件端於此情形改走退回路徑 (以 Rename 完成), 故正常
+// 情況下亦不會呼叫到本方法.
+func (s *Service) Move(ctx context.Context, src, dst string, overwrite bool) error {
+	cur := s.current()
+	if m, ok := cur.(fsb.MoverContext); ok {
+		return wrapCancelable(m.MoveContext(ctx, src, dst, overwrite))
+	}
+	if m, ok := cur.(fsb.Mover); ok {
+		return wrap(m.Move(src, dst, overwrite))
+	}
+	return fsb.NewError(fsb.ErrUnknown, "目前的檔案操作實作未提供搬移能力 (未實作 fsb.Mover 或 fsb.MoverContext)")
 }

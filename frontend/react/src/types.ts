@@ -3,6 +3,7 @@
 import type {
   FsbClient,
   FsbError,
+  FsbWarning,
   LocalePack,
   ReturnMode,
   SelectionMode,
@@ -36,4 +37,9 @@ export interface FsBrowserProps {
   onCancel?: () => void;
   /** 錯誤外拋回呼 (結構化: 代碼 + 訊息 + 操作 + 路徑); 與面板內狀態列顯示同時發生. */
   onError?: (error: FsbError) => void;
+  /**
+   * 警告外拋回呼 (選填, 計劃書第 5.5 節): 目前僅用於被擋下的嵌套貼上. 警告不進狀態列,
+   * 不提供本回呼亦不影響運作, 只是使用者看不到 "為什麼那幾項沒有貼上" 的說明.
+   */
+  onWarning?: (warning: FsbWarning) => void;
 }

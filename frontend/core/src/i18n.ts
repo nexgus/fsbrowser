@@ -18,6 +18,8 @@ export const en = Object.freeze({
   "toolbar.up": "Parent directory",
   "toolbar.home": "Home directory",
   "toolbar.newFolder": "New folder",
+  "toolbar.paste": "Paste",
+  "toolbar.refresh": "Refresh",
   "toolbar.showHidden": "Show hidden items",
   "toolbar.hideHidden": "Hide hidden items",
   "toolbar.root": "Root",
@@ -31,12 +33,21 @@ export const en = Object.freeze({
   // 狀態列
   "status.items": "{count} items",
   "status.itemsSelected": "{count} items · {selected} selected",
+  "status.tooManySelected": "Only one item can be confirmed.",
   "status.loading": "Loading {path}...",
   "status.renaming": "Renaming {name}...",
   "status.creating": "Creating {name}...",
   "status.deleting": "Deleting {count} items...",
   "status.deleteConfirm": "Delete {count} items? This cannot be undone.",
   "status.deleteFailed": "{failed} of {count} items could not be deleted.",
+  "status.copying": "Copying {current} of {count}...",
+  "status.moving": "Moving {current} of {count}...",
+  "status.pasteConflict": "\"{name}\" already exists.",
+  "status.pasteTypeMismatch": "\"{name}\" exists with a different type.",
+  "status.pasteCanceled": "Canceled. {done} of {count} items were processed.",
+  "status.pasteDisconnected":
+    "The connection was lost while processing \"{name}\"; its result is unknown. " +
+    "{done} of {count} items were processed.",
 
   // 空目錄
   "empty.title": "This directory is empty",
@@ -56,7 +67,10 @@ export const en = Object.freeze({
   "menu.rename": "Rename",
   "menu.delete": "Delete",
   "menu.deleteCount": "Delete {count} items",
-  "menu.copyPath": "Copy path",
+  "menu.copyPath": "Copy Path",
+  "menu.cut": "Cut",
+  "menu.copy": "Copy",
+  "menu.paste": "Paste",
   "menu.newFolder": "New folder",
   "menu.refresh": "Refresh",
   "menu.showHidden": "Show hidden",
@@ -66,6 +80,9 @@ export const en = Object.freeze({
   "button.select": "Select",
   "button.save": "Save",
   "button.overwrite": "Overwrite",
+  "button.overwriteAll": "Overwrite All",
+  "button.skip": "Skip",
+  "button.skipAll": "Skip All",
   "button.delete": "Delete",
   "button.dismissError": "Dismiss",
 
@@ -75,6 +92,7 @@ export const en = Object.freeze({
   "error.already_exists": "The target already exists.",
   "error.not_empty": "The directory is not empty.",
   "error.disconnected": "The connection was lost.",
+  "error.canceled": "The operation was canceled.",
   "error.io_error": "An input/output error occurred.",
   "error.unknown": "An unexpected error occurred.",
   "error.withDetail": "{summary} ({detail})",
@@ -137,6 +155,33 @@ export function resolveMessages(pack?: LocalePack): Messages {
 export function createTranslator(pack?: LocalePack): Translate {
   const messages = resolveMessages(pack);
   return (key, params) => interpolate(messages[key] ?? en[key], params);
+}
+
+/**
+ * isMacPlatform 由瀏覽器的使用者代理字串判斷目前是否為 macOS (第 5.2 節).
+ *
+ * 修飾鍵的寫法取決於使用者此刻手上的鍵盤, 宿主並不比元件更清楚, 因此一律自動偵測, 不開放
+ * 由開啟參數指定. 偵測結果只影響選單上的快捷鍵顯示文字: 按鍵處理同時接受 Meta 與 Ctrl,
+ * 判斷失準頂多是顯示的寫法不合當地習慣, 功能不受影響, 故無 `navigator` 的環境
+ * (SSR / 測試) 一律回傳 false.
+ */
+export function isMacPlatform(): boolean {
+  if (typeof navigator === "undefined") return false;
+  // userAgentData.platform 是使用者代理資訊的現代形式, 有則優先採用, 其寫法較 userAgent
+  // 字串明確; 尚未支援的瀏覽器再退回 userAgent 字串比對.
+  const source = navigator as Navigator & { userAgentData?: { platform?: unknown } };
+  const platform = source.userAgentData?.platform;
+  if (typeof platform === "string" && platform !== "") return /mac/i.test(platform);
+  return typeof source.userAgent === "string" && /mac/i.test(source.userAgent);
+}
+
+/**
+ * shortcutLabel 組出選單右側的快捷鍵顯示文字: macOS 為符號式 (⌘X), 其餘平台為文字式
+ * (Ctrl+X). 兩套 UI 共用同一份組法, 以免兩邊各寫一次而寫出不同結果.
+ */
+export function shortcutLabel(key: string, mac: boolean = isMacPlatform()): string {
+  const upper = key.toUpperCase();
+  return mac ? `⌘${upper}` : `Ctrl+${upper}`;
 }
 
 /** errorMessageKey 取得錯誤代碼對應的詞條鍵. */

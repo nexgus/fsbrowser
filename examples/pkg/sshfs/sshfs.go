@@ -6,6 +6,7 @@
 package sshfs
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"path"
@@ -22,6 +23,14 @@ type Runner interface {
 	// Run 在遠端執行指令, 回傳 stdout, stderr 與結束碼. 指令本身順利執行 (即使結束碼
 	// 非 0) 時 err 為 nil; err 非 nil 表示連線層失敗或逾時.
 	Run(cmd string) (stdout, stderr []byte, exit int, err error)
+}
+
+// RunnerContext 是選用的可取消執行能力 (計劃書第 3.1 節): 語意同 Runner.Run, 另接受
+// ctx, 於 ctx 被取消時中止仍在執行中的遠端指令. 複製, 搬移等可能耗時的操作依此能力
+// 回應取消; FS 以型別斷言偵測 Runner 是否額外滿足本介面 (見 runCtx), 不強制所有
+// Runner 實作都要提供, 單元測試因此不需要修改既有的 fakeRunner 即可繼續運作.
+type RunnerContext interface {
+	RunContext(ctx context.Context, cmd string) (stdout, stderr []byte, exit int, err error)
 }
 
 // FS 是遠端檔案系統的實作, 以 Runner 下發指令.
@@ -125,14 +134,118 @@ func (f *FS) Rename(oldPath, newPath string) error {
 	return f.classify(oldP, stderr, exit, err)
 }
 
-// Delete 刪除 path 所指的檔案或目錄. 不遞迴: 目錄以 rmdir 刪除, 非空時回報 not_empty;
-// 其餘項目以 rm 刪除.
+// Delete 遞迴刪除 p 所指的檔案或目錄: 目錄連同其下所有內容一併移除, 非目錄項目則視同
+// 單一項目移除, 兩種情形以同一道 rm -r 指令涵蓋, 不需再依種類分流. 只加遞迴旗標, 不加
+// 強制旗標: 強制旗標會使不存在的路徑也靜默成功 (結束碼 0 且無 stderr), 讓 classify
+// 判斷不出對應的 stderr 訊息, 破壞路徑不存在時歸類為 not_found 的既有語意.
 func (f *FS) Delete(p string) error {
 	cp := cleanPath(p)
-	cmd := "if [ -d " + Quote(cp) + " ] && [ ! -L " + Quote(cp) + " ]; then rmdir -- " + Quote(cp) +
-		"; else rm -- " + Quote(cp) + "; fi"
+	cmd := "rm -r -- " + Quote(cp)
 	_, stderr, exit, err := f.run.Run(cmd)
 	return f.classify(cp, stderr, exit, err)
+}
+
+// CopyContext 遞迴複製 src 到 dst (計劃書第 3.1, 5.4 節). 走訪與遞迴全交由遠端的
+// cp -a 進行 (--archive 隱含 --no-dereference, 對連結本身複製而非解參考, 與介面對
+// 連結不遞迴的語意一致), 本機端只下發單一指令, 不逐一走訪節點; 是否先取得來源清單
+// 快照因此是遠端 cp 自身的責任, 不受本機走訪順序影響 (計劃書第 8 章第一項風險只針對
+// 本機端自行走訪的實作, 不適用於此).
+//
+// 取消透過中止該遠端指令回應: 具備 RunnerContext 能力的執行器 (見 dial.go 之
+// clientRunner) 於 ctx 被取消時關閉指令所在的 session 以中止之; 收到的取消錯誤原樣
+// 回傳 (不經過 classify, 以免被誤歸類為 disconnected), 讓橋接層以 errors.Is 歸類為
+// canceled.
+func (f *FS) CopyContext(ctx context.Context, src, dst string, overwrite bool) error {
+	if err := ctxErr(ctx); err != nil {
+		return err
+	}
+	cp, dp := cleanPath(src), cleanPath(dst)
+	_, stderr, exit, err := f.runCtx(ctx, copyCmd(cp, dp, overwrite))
+	if isCanceled(err) {
+		return err
+	}
+	return f.classify(cp, stderr, exit, err)
+}
+
+// MoveContext 搬移 src 到 dst (計劃書第 3.1 節): 語意同 CopyContext, 但來源於成功後
+// 不再存在. 直接以遠端的 mv 完成; mv 本身在來源與目標分屬不同檔案系統時會自動退為
+// 複製後刪除來源 (rename(2) 跨裝置失敗時的標準行為), 故本機端不需另行判斷是否跨裝置.
+// 取消的處理方式同 CopyContext.
+func (f *FS) MoveContext(ctx context.Context, src, dst string, overwrite bool) error {
+	if err := ctxErr(ctx); err != nil {
+		return err
+	}
+	sp, dp := cleanPath(src), cleanPath(dst)
+	_, stderr, exit, err := f.runCtx(ctx, moveCmd(sp, dp, overwrite))
+	if isCanceled(err) {
+		return err
+	}
+	return f.classify(sp, stderr, exit, err)
+}
+
+// runCtx 呼叫底層執行器: f.run 額外滿足 RunnerContext 時使用該版本, 使 ctx 取消可中止
+// 仍在執行中的遠端指令; 否則退回不帶 context 的 Run, 此時取消僅在指令送出前生效 (呼叫
+// 前已由 ctxErr 檢查, 見 CopyContext / MoveContext).
+func (f *FS) runCtx(ctx context.Context, cmd string) ([]byte, []byte, int, error) {
+	if rc, ok := f.run.(RunnerContext); ok {
+		return rc.RunContext(ctx, cmd)
+	}
+	return f.run.Run(cmd)
+}
+
+// ctxErr 檢查取消脈絡, 已取消或逾時時原樣回傳該脈絡的錯誤; 尚未取消時回傳 nil.
+func ctxErr(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		return nil
+	}
+}
+
+// isCanceled 判定 err 是否為 ctx 取消或逾時所致.
+func isCanceled(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
+// copyCmd 組出遞迴複製的遠端 shell 指令 (計劃書第 5.4 節):
+//   - overwrite 為偽時, 目標已存在即失敗, 輸出含 "File exists" 字樣供既有的 classify
+//     對映為 already_exists; 否則目標原不存在, 直接以 cp -a 建立全新複本, 不涉及合併.
+//   - overwrite 為真時, 來源與目標皆為目錄且皆非連結才走合併: 來源以 "/." 結尾使 cp
+//     複製其內容而非其本身, 併入既有目錄, 裡層同名項目一律覆寫 (cp -a 預設即覆寫既有
+//     檔案, 不加 -n); 其餘情形 (目標不存在, 或種類與來源不同) 一律先整個移除目標再
+//     重新複製, 使覆寫語意單純一致, 不必分別處理檔案對檔案, 連結對連結等組合.
+func copyCmd(src, dst string, overwrite bool) string {
+	s, d := Quote(src), Quote(dst)
+	if !overwrite {
+		return "if [ -e " + d + " ] || [ -L " + d + " ]; then echo 'cp: target File exists' 1>&2; exit 1; fi; " +
+			"cp -a -- " + s + " " + d
+	}
+	return "if [ -d " + d + " ] && [ ! -L " + d + " ] && [ -d " + s + " ] && [ ! -L " + s + " ]; then " +
+		"cp -a -- " + s + "/. " + d + "/; " +
+		"elif [ -e " + d + " ] || [ -L " + d + " ]; then " +
+		"rm -rf -- " + d + " && cp -a -- " + s + " " + d + "; " +
+		"else " +
+		"cp -a -- " + s + " " + d + "; " +
+		"fi"
+}
+
+// moveCmd 組出搬移的遠端 shell 指令, 結構同 copyCmd; 直接以 mv 取代 cp -a 完成非合併
+// 的分支 (mv 本身即可完成搬移, 來源於成功後不再存在), 目錄對目錄的合併分支則因 mv
+// 無法表達合併, 改以複製內容後刪除來源達成.
+func moveCmd(src, dst string, overwrite bool) string {
+	s, d := Quote(src), Quote(dst)
+	if !overwrite {
+		return "if [ -e " + d + " ] || [ -L " + d + " ]; then echo 'mv: target File exists' 1>&2; exit 1; fi; " +
+			"mv -- " + s + " " + d
+	}
+	return "if [ -d " + d + " ] && [ ! -L " + d + " ] && [ -d " + s + " ] && [ ! -L " + s + " ]; then " +
+		"cp -a -- " + s + "/. " + d + "/ && rm -rf -- " + s + "; " +
+		"elif [ -e " + d + " ] || [ -L " + d + " ]; then " +
+		"rm -rf -- " + d + " && mv -- " + s + " " + d + "; " +
+		"else " +
+		"mv -- " + s + " " + d + "; " +
+		"fi"
 }
 
 // parseRecords 解析 find -printf 的輸出: NUL 分隔每筆, 每筆以 tab 分為五欄; 欄位不足
@@ -288,3 +401,9 @@ func hiddenName(name string) bool {
 
 // 確保 FS 滿足檔案操作介面.
 var _ fsb.FileSystem = (*FS)(nil)
+
+// 確保 FS 滿足帶 context 的複製與搬移選用介面.
+var (
+	_ fsb.CopierContext = (*FS)(nil)
+	_ fsb.MoverContext  = (*FS)(nil)
+)

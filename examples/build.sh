@@ -9,6 +9,10 @@
 # Go 端以 go:embed 內嵌 frontend/dist, 故必須先建置前端; 同時重新產生 Wails bindings,
 # 確保 frontend/bindings (未入 git) 與目前 Go 端介面一致.
 #
+# 各範例前端以本機路徑相依連向 frontend/ 底下的元件套件, 而套件的進入點是其建置產物
+# (dist, 未入 git), 因此本腳本先建置元件套件, 再建置範例前端; 否則範例內嵌到的會是上一
+# 次留下的舊產物. 語言包套件直接發佈原始碼, 無須建置.
+#
 # npm 依賴不會每次重裝: node_modules 不存在時本腳本自行執行一次 npm install, 已存在則
 # 直接沿用 (依賴清單有變動時請自行重跑 npm install).
 set -e
@@ -36,6 +40,20 @@ find_wails3() {
 WAILS3="$(find_wails3)"
 
 mkdir -p bin
+
+# $1: 元件套件目錄名 (core / react / vue3), 對應 frontend/<pkg>/
+build_package() {
+  local pkg="$1"
+  local dir="../frontend/${pkg}"
+
+  if [ ! -d "${dir}/node_modules" ]; then
+    echo "==> [pkg:${pkg}] Installing dependencies (node_modules not found)"
+    (cd "${dir}" && npm install)
+  fi
+
+  echo "==> [pkg:${pkg}] Building package (dist)"
+  (cd "${dir}" && npm run build)
+}
 
 # $1: app 名稱 (react / vue3), 對應 examples/cmd/<app>/
 build_app() {
@@ -69,6 +87,11 @@ build_app() {
     -o "../../bin/${app}-darwin-$(go env GOARCH)" \
     .)
 }
+
+# core 需先於 react 與 vue3: 後兩者的建置要讀取 core 產物中的型別宣告.
+build_package core
+build_package react
+build_package vue3
 
 build_app react
 build_app vue3
