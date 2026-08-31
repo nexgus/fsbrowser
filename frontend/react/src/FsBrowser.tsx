@@ -148,7 +148,12 @@ export function FsBrowser(props: FsBrowserProps) {
       items: [
         { key: "newFolder", label: t("menu.newFolder"), onSelect: () => store.beginNewFolder() },
         { key: "refresh", label: t("menu.refresh"), onSelect: () => void store.refresh() },
-        { key: "showHidden", label: t("menu.showHidden"), onSelect: () => store.toggleHidden() },
+        {
+          key: "showHidden",
+          label: t("menu.showHidden"),
+          checked: snapshot.showHidden,
+          onSelect: () => store.toggleHidden(),
+        },
       ],
     });
   }

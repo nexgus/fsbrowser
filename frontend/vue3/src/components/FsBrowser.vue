@@ -513,8 +513,14 @@ const statusVariant = computed<"neutral" | "error" | "confirm">(() => {
         <li class="fsb-menu-item" @click="menuCopyPath()">{{ t("menu.copyPath") }}</li>
       </template>
       <template v-else>
-        <li class="fsb-menu-item" @click="menuNewFolder()">{{ t("menu.newFolder") }}</li>
-        <li class="fsb-menu-item" @click="menuRefresh()">{{ t("menu.refresh") }}</li>
+        <li class="fsb-menu-item" @click="menuNewFolder()">
+          <span class="fsb-menu-check"></span>
+          {{ t("menu.newFolder") }}
+        </li>
+        <li class="fsb-menu-item" @click="menuRefresh()">
+          <span class="fsb-menu-check"></span>
+          {{ t("menu.refresh") }}
+        </li>
         <li class="fsb-menu-item" @click="menuToggleHidden()">
           <span class="fsb-menu-check">{{ snapshot.showHidden ? "✓" : "" }}</span>
           {{ t("menu.showHidden") }}
@@ -714,7 +720,9 @@ const statusVariant = computed<"neutral" | "error" | "confirm">(() => {
 }
 .fsb-menu-check {
   display: inline-block;
+  flex: none;
   width: 1em;
+  text-align: center;
 }
 
 /* 欄位標頭 */

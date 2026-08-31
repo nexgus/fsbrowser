@@ -1,12 +1,15 @@
 // ContextMenu: 面板內暫態元素, 點擊外部即收合, 非視窗 (計劃書第 5.5 節).
 
 import { useEffect, useRef } from "react";
+import { IconCheck } from "./icons.js";
 
 export interface ContextMenuItem {
   key: string;
   label: string;
   disabled?: boolean;
   danger?: boolean;
+  /** 勾選狀態, 選填; 未提供代表此項不是可勾選項目 (詳見下方渲染規則). */
+  checked?: boolean;
   onSelect: () => void;
 }
 
@@ -39,6 +42,9 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
   const left = typeof window === "undefined" ? x : Math.min(x, window.innerWidth - 190);
   const top = typeof window === "undefined" ? y : Math.min(y, window.innerHeight - items.length * 32 - 16);
 
+  // 只要選單中有任一項提供勾選狀態, 每一項都要保留固定寬度的勾選欄位, 讓文字左緣對齊.
+  const showCheckColumn = items.some((item) => item.checked !== undefined);
+
   return (
     <div ref={ref} className="fsb-menu" style={{ left, top }} role="menu">
       {items.map((item) => (
@@ -53,6 +59,9 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
             onClose();
           }}
         >
+          {showCheckColumn ? (
+            <span className="fsb-menu-item-check">{item.checked ? <IconCheck size={12} /> : null}</span>
+          ) : null}
           <span>{item.label}</span>
         </div>
       ))}

@@ -259,8 +259,7 @@ export const FSB_STYLE_CSS = `
 .fsb-menu-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 6px;
   padding: 6px 10px;
   border-radius: var(--fsb-radius);
   cursor: pointer;
@@ -269,6 +268,14 @@ export const FSB_STYLE_CSS = `
 .fsb-menu-item.fsb-disabled { color: var(--fsb-text-muted); cursor: default; }
 .fsb-menu-item.fsb-danger { color: var(--fsb-error-text); background: var(--fsb-error-bg); }
 .fsb-menu-item.fsb-danger:hover { background: var(--fsb-error-bg); }
+/* 勾選欄位: 固定寬度, 不隨內容伸縮, 內容置中; 與磁碟機切換選單的 .fsb-root-menu-item-check 視覺一致. */
+.fsb-menu-item-check {
+  display: flex;
+  justify-content: center;
+  width: 14px;
+  flex-shrink: 0;
+  color: var(--fsb-accent);
+}
 .fsb-menu-sep { height: 1px; margin: 4px 2px; background: var(--fsb-section-border); }
 
 .fsb-savename {
