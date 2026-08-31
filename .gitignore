@@ -6,3 +6,5 @@ CLAUDE.md
 /test/frontend/bindings/
 temp/
 /bin/
+/frontend/*/node_modules/
+/frontend/*/dist/
