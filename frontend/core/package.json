@@ -1,6 +1,6 @@
 {
   "name": "@nexgus/fsb-core",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Framework-agnostic core logic for the fsbrowser file system browser component",
   "license": "MIT",
   "type": "module",

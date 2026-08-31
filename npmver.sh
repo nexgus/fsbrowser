@@ -10,9 +10,9 @@ cd "$(dirname "$0")"
 
 PACKAGES=(core locales react vue3)
 
-die() { echo "npm_version.sh: $*" >&2; exit 1; }
+die() { echo "npmver.sh: $*" >&2; exit 1; }
 
-[ $# -eq 1 ] || die "用法: ./npm_version.sh <版本>"
+[ $# -eq 1 ] || die "用法: ./npmver.sh <版本>"
 VER="${1#v}"
 echo "$VER" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' \
     || die "版本 ${1} 不是合法的 semver"

@@ -52,7 +52,11 @@ type FileSystem interface {
 	// Roots 回傳所有根. POSIX 實作回傳單一根 (["/"]); Windows 實作回傳各磁碟機
 	// (["C:/", "D:/", ...]).
 	Roots() ([]string, error)
-	// PathStyle 回傳 "posix" 或 "windows", 僅影響前端的顯示層.
+	// PathStyle 回傳 "posix" 或 "windows". 本項不涉及檔案操作, 也不改變跨越介面的路徑
+	// 形式 (進出一律為內部形式); 它決定前端的三項行為: 路徑的顯示寫法 (Windows 風格以
+	// 反斜線呈現, 根標籤去除結尾分隔符), 路徑比對是否忽略大小寫 (Windows 風格轉小寫後
+	// 比對), 以及存檔模式的檔名是否額外檢查 Windows 保留字元. 其中路徑比對並非外觀問題:
+	// 巢狀貼上的防護即以此判定, 宣告錯誤會使該防護在使用者僅改動大小寫時失效.
 	PathStyle() string
 	// MakeDir 於 path 建立目錄.
 	MakeDir(path string) error
