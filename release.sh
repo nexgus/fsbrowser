@@ -3,7 +3,8 @@
 #
 # 用法: ./release.sh
 #   版本取自 frontend/ 下四個 package.json 的 version, 必須彼此一致 (以
-#   npmver.sh 統一修改). 打包產物為 bin/fsbrowser.npm.{版本}+{hash}.tar.gz;
+#   npmver.sh 統一修改, 亦可執行不帶參數的 npmver.sh 查詢目前版本).
+#   打包產物為 bin/fsbrowser.npm.{版本}+{hash}.tar.gz;
 #   工作區有未 commit 變更時檔名加上 -dirty, 且一律不可 release. 預發布版本
 #   (帶 semver 預發布尾碼) 亦不可 release, 因為 release 對應的 commit 必須是
 #   正式版本. 不可 release 時本腳本仍會留下 tarball 供本機測試使用.
