@@ -2,8 +2,6 @@
 CLAUDE.md
 /.claude/
 /docs/plans/
-/test/bin/
-/test/frontend/bindings/
 temp/
 /bin/
 /frontend/*/node_modules/

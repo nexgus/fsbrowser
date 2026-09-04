@@ -9,10 +9,10 @@ package hostctl
 import (
 	"sync"
 
-	"github.com/nexgus/fsbrowser/examples/pkg/localfs"
-	"github.com/nexgus/fsbrowser/examples/pkg/sshfs"
 	"github.com/nexgus/fsbrowser/fsb"
-	"github.com/nexgus/fsbrowser/service"
+	"github.com/nexgus/fsbrowser/fsb/service"
+	"github.com/nexgus/fsbrowser/fsdrv/localfs"
+	"github.com/nexgus/fsbrowser/fsdrv/sshfs"
 )
 
 // 模式常數: Mode 的回傳值.

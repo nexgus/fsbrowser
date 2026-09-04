@@ -45,7 +45,7 @@
 牽涉三個角色, 其中只有兩個由宿主 app 自行撰寫:
 
 - **宿主 app 的 Go 程式碼** 實作檔案操作介面 -- 由八項必要操作構成的合約 (列目錄, 查屬性, 家目錄, 列出根, 路徑風格, 建立目錄, 重新命名, 刪除, 再加上兩項選用能力) 完整定義在 [`fsb/fsb.go`](../fsb/fsb.go), 動手寫這部分的 Go 程式碼之前, 這是唯一必讀的檔案; [實作檔案操作介面](interface-guide.zh-Hant.md) 一文會逐項說明每個操作.
-- **橋接層 service**, 位於 [`service/`](../service/), 是 fsbrowser 自身的程式碼 -- 只需註冊, 不需修改. 它透過產生的 bindings 把宿主 app 的實作交給前端呼叫, 並把它回傳的任何錯誤正規化成元件預期的結構化形式.
+- **橋接層 service**, 位於 [`fsb/service/`](../fsb/service/), 是 fsbrowser 自身的程式碼 -- 只需註冊, 不需修改. 它透過產生的 bindings 把宿主 app 的實作交給前端呼叫, 並把它回傳的任何錯誤正規化成元件預期的結構化形式.
 - **宿主 app 的前端** 掛載 `@nexgus/fsb-vue` 或 `@nexgus/fsb-react` 元件, 並把以產生的 bindings 建構出來的 client 交給它 -- 這是需自行撰寫的第二個, 也是最後一個檔案.
 
 第 3 章會依序說明這兩者.
@@ -67,7 +67,7 @@ your-app/
     ├── vite.config.ts
     ├── index.html
     ├── bindings/            # 由 `wails3 generate bindings` 產生, 不手動編輯
-    │   └── github.com/nexgus/fsbrowser/service/
+    │   └── github.com/nexgus/fsbrowser/fsb/service/
     └── src/
         ├── fsbClient.ts     # <- 需自行撰寫: 唯一接觸 Wails bindings 的檔案
         └── ...               # app 其餘部分, 匯入 fsbClient 使用
@@ -98,7 +98,7 @@ var _ fsb.FileSystem = (*FileSystem)(nil)
 **步驟 2 -- 註冊橋接層 service**, 作法與 [`examples/cmd/vue3/main.go`](../examples/cmd/vue3/main.go) 一致:
 
 ```go
-import "github.com/nexgus/fsbrowser/service"
+import "github.com/nexgus/fsbrowser/fsb/service"
 
 bridge := service.New(myfs.New())
 
@@ -124,7 +124,7 @@ wails3 generate bindings
 
 ```ts
 // frontend/src/fsbClient.ts
-import * as bindings from "../bindings/github.com/nexgus/fsbrowser/service/service.js";
+import * as bindings from "../bindings/github.com/nexgus/fsbrowser/fsb/service/service.js";
 import { createClient } from "@nexgus/fsb-core";
 
 export const fsbClient = createClient(bindings);
@@ -203,7 +203,7 @@ go install github.com/wailsapp/wails/v3/cmd/wails3@latest
 ### 4.2 建置
 
 ```bash
-examples/build.sh
+./build.sh
 ```
 
 腳本會重新產生 Wails bindings, 於首次執行時安裝前端依賴 (只有在 `node_modules` 不存在時才執行 `npm install`), 建置前端, 並在 `examples/bin/` 為兩個 app 各自產出單一檔案的執行檔:
@@ -225,7 +225,7 @@ Windows 版則將 `.exe` 複製到 Windows 機器上執行; 唯一的系統需�
 
 | 套件 | 內容 |
 |---|---|
-| `github.com/nexgus/fsbrowser` | Go module: 介面定義與橋接層 service |
+| `github.com/nexgus/fsbrowser/fsb` | Go module: 介面定義與橋接層 service |
 | `@nexgus/fsb-core` | 框架無關的邏輯層: client 介面, 瀏覽狀態, 語言與主題機制, 格式化 |
 | `@nexgus/fsb-vue` | Vue 3 元件 |
 | `@nexgus/fsb-react` | React 元件 |

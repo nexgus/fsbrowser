@@ -31,7 +31,7 @@ HASH=$(git rev-parse --short HEAD)
 DIRTY=""
 [ -z "$(git status --porcelain)" ] || DIRTY="-dirty"
 
-# 建置: locales 僅含原始碼故無建置步驟; npm 依賴比照 examples/build.sh, 僅在
+# 建置: locales 僅含原始碼故無建置步驟; npm 依賴比照 build.sh, 僅在
 # node_modules 不存在時安裝一次.
 for pkg in core react vue3; do
     (cd "frontend/${pkg}" \

@@ -1,6 +1,6 @@
 {
   "name": "@nexgus/fsb-react",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "React 元件套件: fsbrowser 檔案瀏覽面板 (@nexgus/fsb-core 的 React 繫結)",
   "license": "MIT",
   "type": "module",

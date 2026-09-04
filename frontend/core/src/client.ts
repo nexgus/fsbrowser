@@ -210,7 +210,7 @@ export function missingBindingMethods(bindings: unknown): string[] {
  *
  * 宿主的接線檔為唯一與 Wails 綁定之處:
  *
- *     import * as bindings from "./bindings/github.com/nexgus/fsbrowser/service";
+ *     import * as bindings from "./bindings/github.com/nexgus/fsbrowser/fsb/service";
  *     import { createClient } from "@nexgus/fsb-core";
  *     export const fsbClient = createClient(bindings);
  *

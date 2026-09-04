@@ -11,7 +11,7 @@ fsbrowser 對 SSH, S3 或本機磁碟一無所知, 只定義一個小型的 Go �
 | Import 路徑 | 內容 |
 |---|---|
 | `github.com/nexgus/fsbrowser/fsb` | 介面, `Entry`, `Kind`, `Error`, `ErrorCode`, 選用能力介面, `Capabilities` |
-| `github.com/nexgus/fsbrowser/service` | 把實作暴露給前端的橋接層 service |
+| `github.com/nexgus/fsbrowser/fsb/service` | 把實作暴露給前端的橋接層 service |
 
 `fsb` 套件只從標準函式庫匯入 `context`, `errors` 與 `time`, 整個模組本身完全沒有宣告任何外部相依套件. 它不匯入 Wails, 也不匯入任何通訊協定函式庫. 由此帶來兩個結果:
 
@@ -487,7 +487,7 @@ func translate(err error, p string) error {
 - **路徑風格與原生路徑轉換. ** `PathStyle` 回傳 `"windows"`, 進來時有一道轉換步驟把內部形式的 `C:/foo` 轉成原生的 `C:\foo`, 出去時再轉回來. 磁碟機根在這裡是個陷阱: 原生形式必須是 `C:\`, 因為單獨的 `C:` 代表"該磁碟機上目前所在的目錄".
 - **隱藏項目偵測. ** 開頭點的規則是 POSIX 的慣例; 在 Windows 上隱藏屬性是真正的檔案屬性, 必須當作屬性來讀取, 點的規則只保留作為備援.
 
-內附的本機檔案系統實作正是把這三個關注點拆進以建置標籤區分的檔案中 -- 參見 `examples/pkg/localfs/localfs_posix.go` 與 `examples/pkg/localfs/localfs_windows.go`, 共用的八項操作則在 `examples/pkg/localfs/localfs.go`. 請複製這種拆分方式, 不要把平台分支放進操作本身裡面.
+內附的本機檔案系統實作正是把這三個關注點拆進以建置標籤區分的檔案中 -- 參見 `fsdrv/localfs/localfs_posix.go` 與 `fsdrv/localfs/localfs_windows.go`, 共用的八項操作則在 `fsdrv/localfs/localfs.go`. 請複製這種拆分方式, 不要把平台分支放進操作本身裡面.
 
 ## 7. 選用能力: 複製與搬移
 
@@ -789,7 +789,7 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
-	"github.com/nexgus/fsbrowser/service"
+	"github.com/nexgus/fsbrowser/fsb/service"
 
 	"myapp/internal/myfs"
 )
@@ -853,7 +853,7 @@ bridge.SetFileSystem(otherFS)
 
 這個 repository 內附兩份完整實作, 兩者合起來涵蓋了真實實作常見的兩種樣貌.
 
-- [`examples/pkg/localfs/`](../examples/pkg/localfs/) -- 完整的本機檔案系統實作, 上面的最小範例正是它的簡化版. 值得一讀的原因在於最小版本省略的兩件事: 以建置標籤拆分, 讓根的列舉, 路徑轉換與隱藏項目偵測維持平台專屬, 而八項操作維持平台中立; 以及 `localfs_copy.go` 中具生產規模的遞迴複製與搬移, 包括跨裝置備援與目錄對目錄貼上的合併語意.
-- [`examples/pkg/sshfs/`](../examples/pkg/sshfs/) -- 一份包住既有連線的遠端實作. 它示範了當後端根本不是檔案系統 API 時該如何滿足這個介面: 每個操作都變成一道遠端指令, 其輸出被解析回 `Entry` 值. 它還示範了兩個值得借用的技巧 -- 依賴一個精簡的指令執行器介面, 讓整份實作不必連網就能單元測試; 以及把傳輸層失敗對應到 `disconnected` 錯誤代碼, 讓元件可以乾淨地放棄一整批操作.
+- [`fsdrv/localfs/`](../fsdrv/localfs/) -- 完整的本機檔案系統實作, 上面的最小範例正是它的簡化版. 值得一讀的原因在於最小版本省略的兩件事: 以建置標籤拆分, 讓根的列舉, 路徑轉換與隱藏項目偵測維持平台專屬, 而八項操作維持平台中立; 以及 `localfs_copy.go` 中具生產規模的遞迴複製與搬移, 包括跨裝置備援與目錄對目錄貼上的合併語意.
+- [`fsdrv/sshfs/`](../fsdrv/sshfs/) -- 一份包住既有連線的遠端實作. 它示範了當後端根本不是檔案系統 API 時該如何滿足這個介面: 每個操作都變成一道遠端指令, 其輸出被解析回 `Entry` 值. 它還示範了兩個值得借用的技巧 -- 依賴一個精簡的指令執行器介面, 讓整份實作不必連網就能單元測試; 以及把傳輸層失敗對應到 `disconnected` 錯誤代碼, 讓元件可以乾淨地放棄一整批操作.
 
 關於元件的前端部分 -- 每一個設定項, 事件與 callback -- 請參見 [`docs/component-reference.zh-Hant.md`](component-reference.zh-Hant.md). 關於安裝, 整合概觀與前端套件, 請參見 [README](README.zh-Hant.md).

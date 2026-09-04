@@ -11,7 +11,7 @@ Everything you have to satisfy is declared in a single file: [`fsb/fsb.go`](../f
 | Import path | Contents |
 |---|---|
 | `github.com/nexgus/fsbrowser/fsb` | The interface, `Entry`, `Kind`, `Error`, `ErrorCode`, the optional capability interfaces, `Capabilities` |
-| `github.com/nexgus/fsbrowser/service` | The bridge service that exposes your implementation to the front end |
+| `github.com/nexgus/fsbrowser/fsb/service` | The bridge service that exposes your implementation to the front end |
 
 The `fsb` package imports nothing but `context`, `errors`, and `time` from the standard library, and the module itself declares no external dependencies at all. It does not import Wails, and it does not import any protocol library. Two consequences follow:
 
@@ -492,7 +492,7 @@ Exactly three things differ on Windows, and all three are isolated well away fro
 - **Path style and native path conversion.** `PathStyle` returns `"windows"`, and a conversion step turns internal `C:/foo` into native `C:\foo` on the way in and back again on the way out. A drive root is a trap here: the native form must be `C:\`, since `C:` alone means "the current directory on that drive".
 - **Hidden item detection.** The leading-dot rule is a POSIX convention; on Windows the hidden attribute is a real file attribute and must be read as one, with the dot rule kept only as a fallback.
 
-The bundled local file system implementation factors precisely these three concerns into build-tagged files -- see `examples/pkg/localfs/localfs_posix.go` and `examples/pkg/localfs/localfs_windows.go`, with the shared eight operations in `examples/pkg/localfs/localfs.go`. Copy that split rather than putting platform branches inside the operations themselves.
+The bundled local file system implementation factors precisely these three concerns into build-tagged files -- see `fsdrv/localfs/localfs_posix.go` and `fsdrv/localfs/localfs_windows.go`, with the shared eight operations in `fsdrv/localfs/localfs.go`. Copy that split rather than putting platform branches inside the operations themselves.
 
 ## 7. Optional capabilities: copy and move
 
@@ -797,7 +797,7 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
-	"github.com/nexgus/fsbrowser/service"
+	"github.com/nexgus/fsbrowser/fsb/service"
 
 	"myapp/internal/myfs"
 )
@@ -861,7 +861,7 @@ The next operation uses the new implementation; operations already in flight are
 
 Two complete implementations ship with the repository, and between them they cover both of the shapes a real implementation tends to take.
 
-- [`examples/pkg/localfs/`](../examples/pkg/localfs/) -- the full local file system implementation the minimal example above is a reduction of. It is worth reading for two things the minimal version omits: the build-tagged split that keeps root enumeration, path conversion, and hidden-item detection platform-specific while the eight operations stay platform-neutral, and a production-shaped recursive copy and move in `localfs_copy.go`, including the cross-device fallback and the merge semantics for directory-into-directory pastes.
-- [`examples/pkg/sshfs/`](../examples/pkg/sshfs/) -- a remote implementation that wraps an existing connection. It shows how to satisfy the interface when the backend is not a file system API at all: each operation becomes a remote command whose output is parsed back into `Entry` values. It also demonstrates two techniques worth stealing -- depending on a narrow command-runner interface so the whole implementation can be unit-tested without a network, and mapping transport-layer failures onto the `disconnected` error code so the component can abandon a batch cleanly.
+- [`fsdrv/localfs/`](../fsdrv/localfs/) -- the full local file system implementation the minimal example above is a reduction of. It is worth reading for two things the minimal version omits: the build-tagged split that keeps root enumeration, path conversion, and hidden-item detection platform-specific while the eight operations stay platform-neutral, and a production-shaped recursive copy and move in `localfs_copy.go`, including the cross-device fallback and the merge semantics for directory-into-directory pastes.
+- [`fsdrv/sshfs/`](../fsdrv/sshfs/) -- a remote implementation that wraps an existing connection. It shows how to satisfy the interface when the backend is not a file system API at all: each operation becomes a remote command whose output is parsed back into `Entry` values. It also demonstrates two techniques worth stealing -- depending on a narrow command-runner interface so the whole implementation can be unit-tested without a network, and mapping transport-layer failures onto the `disconnected` error code so the component can abandon a batch cleanly.
 
 For the front-end side of the component -- every configuration option, event, and callback -- see [`docs/component-reference.md`](component-reference.md). For installation, the integration overview, and the front-end packages, see the [README](../README.md).

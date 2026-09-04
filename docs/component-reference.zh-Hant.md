@@ -10,7 +10,7 @@
 
 ```ts
 import { createClient } from "@nexgus/fsb-core";
-import * as bindings from "./bindings/github.com/nexgus/fsbrowser/service/service.js";
+import * as bindings from "./bindings/github.com/nexgus/fsbrowser/fsb/service/service.js";
 
 export const fsbClient = createClient(bindings);
 ```
@@ -22,7 +22,7 @@ Wails v3 的 bindings 產生器對同一個 service 可能產生兩種不同的�
 - **直接匯入產生出來的實作檔. ** 產生器為某個 service 產生的 `index.js` 會以具名物件 (`{ Service }`) 重新匯出實作; 改匯入 `service.js` 則可直接取得 `createClient` 需要的扁平方法集合, 不必再另外拆解:
 
   ```ts
-  import * as bindings from "./bindings/github.com/nexgus/fsbrowser/service/service.js";
+  import * as bindings from "./bindings/github.com/nexgus/fsbrowser/fsb/service/service.js";
   import { createClient } from "@nexgus/fsb-core";
 
   export const fsbClient = createClient(bindings);
@@ -32,7 +32,7 @@ Wails v3 的 bindings 產生器對同一個 service 可能產生兩種不同的�
 
   ```ts
   import { createClient } from "@nexgus/fsb-core";
-  import * as bindings from "./bindings/github.com/nexgus/fsbrowser/service/index.js";
+  import * as bindings from "./bindings/github.com/nexgus/fsbrowser/fsb/service/index.js";
 
   export const fsbClient = createClient(bindings.Service);
   ```

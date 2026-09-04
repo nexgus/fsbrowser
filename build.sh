@@ -6,8 +6,8 @@
 #   - macOS (本機 arch): 正常 cgo 建置, 系統 framework 為動態載入 (平台限制), 仍為單一
 #     執行檔.
 #
-# Go 端以 go:embed 內嵌 frontend/dist, 故必須先建置前端; 同時重新產生 Wails bindings,
-# 確保 frontend/bindings (未入 git) 與目前 Go 端介面一致.
+# Go 端以 go:embed 內嵌各範例的 frontend/dist, 故必須先建置前端; 同時重新產生 Wails
+# bindings, 確保各範例的 frontend/bindings (未入 git) 與目前 Go 端介面一致.
 #
 # 各範例前端以本機路徑相依連向 frontend/ 底下的元件套件, 而套件的進入點是其建置產物
 # (dist, 未入 git), 因此本腳本先建置元件套件, 再建置範例前端; 否則範例內嵌到的會是上一
@@ -39,12 +39,12 @@ find_wails3() {
 
 WAILS3="$(find_wails3)"
 
-mkdir -p bin
+mkdir -p examples/bin
 
 # $1: 元件套件目錄名 (core / react / vue3), 對應 frontend/<pkg>/
 build_package() {
   local pkg="$1"
-  local dir="../frontend/${pkg}"
+  local dir="frontend/${pkg}"
 
   if [ ! -d "${dir}/node_modules" ]; then
     echo "==> [pkg:${pkg}] Installing dependencies (node_modules not found)"
@@ -58,7 +58,7 @@ build_package() {
 # $1: app 名稱 (react / vue3), 對應 examples/cmd/<app>/
 build_app() {
   local app="$1"
-  local dir="cmd/${app}"
+  local dir="examples/cmd/${app}"
 
   echo "==> [${app}] Generating Wails bindings"
   (cd "${dir}" && "${WAILS3}" generate bindings -b ./...)
@@ -97,5 +97,5 @@ build_app react
 build_app vue3
 
 echo "==> Build artifacts"
-ls -lh bin/
-file bin/* 2>/dev/null || true
+ls -lh examples/bin/
+file examples/bin/* 2>/dev/null || true

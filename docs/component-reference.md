@@ -10,7 +10,7 @@ Both components talk to your application exclusively through a `client` object o
 
 ```ts
 import { createClient } from "@nexgus/fsb-core";
-import * as bindings from "./bindings/github.com/nexgus/fsbrowser/service/service.js";
+import * as bindings from "./bindings/github.com/nexgus/fsbrowser/fsb/service/service.js";
 
 export const fsbClient = createClient(bindings);
 ```
@@ -22,7 +22,7 @@ The Wails v3 bindings generator can produce two different shapes for the same se
 - **Import the generated implementation file directly.** The generator's `index.js` for a service re-exports the implementation under a named object (`{ Service }`); importing `service.js` instead gives you the flat method set that `createClient` expects, with no further unwrapping:
 
   ```ts
-  import * as bindings from "./bindings/github.com/nexgus/fsbrowser/service/service.js";
+  import * as bindings from "./bindings/github.com/nexgus/fsbrowser/fsb/service/service.js";
   import { createClient } from "@nexgus/fsb-core";
 
   export const fsbClient = createClient(bindings);
@@ -32,7 +32,7 @@ The Wails v3 bindings generator can produce two different shapes for the same se
 
   ```ts
   import { createClient } from "@nexgus/fsb-core";
-  import * as bindings from "./bindings/github.com/nexgus/fsbrowser/service/index.js";
+  import * as bindings from "./bindings/github.com/nexgus/fsbrowser/fsb/service/index.js";
 
   export const fsbClient = createClient(bindings.Service);
   ```
