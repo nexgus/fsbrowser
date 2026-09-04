@@ -3,8 +3,8 @@ module github.com/nexgus/fsbrowser/examples
 go 1.26.4
 
 require (
-	github.com/nexgus/fsbrowser/fsb v0.0.0
-	github.com/nexgus/fsbrowser/fsdrv v0.0.0
+	github.com/nexgus/fsbrowser/fsb v0.5.1
+	github.com/nexgus/fsbrowser/fsdrv v0.5.1
 	github.com/wailsapp/wails/v3 v3.0.0-beta.8
 )
 

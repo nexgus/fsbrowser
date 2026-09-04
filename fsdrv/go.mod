@@ -3,7 +3,7 @@ module github.com/nexgus/fsbrowser/fsdrv
 go 1.26.4
 
 require (
-	github.com/nexgus/fsbrowser/fsb v0.0.0
+	github.com/nexgus/fsbrowser/fsb v0.5.1
 	golang.org/x/crypto v0.53.0
 )
 
