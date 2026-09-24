@@ -38,6 +38,7 @@ export const zhHant: LocalePack = {
   // 狀態列
   "status.items": "{count} 個項目",
   "status.itemsSelected": "{count} 個項目 · 已選 {selected} 個",
+  "status.itemsCurrentDir": "{count} 個項目 · 將選擇目前目錄",
   "status.tooManySelected": "僅能確認單一項目.",
   "status.loading": "正在載入 {path}...",
   "status.renaming": "正在重新命名 {name}...",

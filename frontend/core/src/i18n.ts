@@ -33,6 +33,7 @@ export const en = Object.freeze({
   // 狀態列
   "status.items": "{count} items",
   "status.itemsSelected": "{count} items · {selected} selected",
+  "status.itemsCurrentDir": "{count} items · Current folder will be selected",
   "status.tooManySelected": "Only one item can be confirmed.",
   "status.loading": "Loading {path}...",
   "status.renaming": "Renaming {name}...",

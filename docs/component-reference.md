@@ -90,6 +90,8 @@ All props below are read once the panel is mounted; changing most of them after 
 
 `selection-mode` governs which rows the user is *allowed* to select. In `"dir"` mode, only directories (and symlinks resolving to a directory) are selectable; regular files, sockets, FIFOs, device files, and broken links are shown but cannot be picked. In `"file"` and `"save"` mode, only regular files (and symlinks resolving to one) are selectable; directories remain enterable by double-click but cannot be the final selection.
 
+In `"dir"` mode, confirming with nothing selected returns the directory currently being browsed, matching how the system's own folder picker behaves; this requires a directory to already be loaded, so confirming is disabled until the panel finishes its initial listing.
+
 `return-mode` / `returnMode` (`"single" | "multiple"`, default `"single"`) decides the *shape* of the result handed to `onSelect`: a single path string, or an array of path strings. It does not change how many rows the user can click -- Ctrl/Cmd-click and Shift-click always extend the selection regardless of return mode, because batch operations (cut, copy, delete) need multi-row selection to be usable even when the panel is ultimately configured to return one path. What return mode actually gates is the confirm button and the status bar: in single mode, having more than one row selected disables confirming and the status bar explains why, until the selection is pared back down to one.
 
 `extensions` (`string[]`, no default) restricts which files count as selectable in `"file"` and `"save"` mode; directories are never affected by it. Entries that do not match are dimmed rather than removed from the list, so the user can still see and enter directories that contain only non-matching files. See section 5 for exactly how matching and the leading `*.`/`.` are handled, and for how a semicolon-delimited glob string from an existing host UI converts into this array.
@@ -176,7 +178,7 @@ The list supports both single- and multi-row selection regardless of `returnMode
 
 In `returnMode="single"`, the confirm button (Select/Save) is disabled whenever more than one row is selected, and the status bar shows "Only one item can be confirmed." for as long as that's true -- it does not silently pick the first or last selected item. Reducing the selection back to exactly one (or zero-then-one) re-enables confirming.
 
-`returnMode="multiple"` requires only that at least one row be selected, and no upper bound applies.
+`returnMode="multiple"` requires only that at least one row be selected, and no upper bound applies -- except in `"dir"` mode, where nothing selected is also confirmable (see 2.2).
 
 ## 5. Save mode and extension filtering
 

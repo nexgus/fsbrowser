@@ -329,6 +329,47 @@ describe("確認選定結果", () => {
     expect(store.getSnapshot().canConfirmSelection).toBe(false);
   });
 
+  it("目錄模式: 選取一個目錄時仍回傳該目錄", async () => {
+    const onSelect = vi.fn();
+    const store = await readyStore({ selectionMode: "dir", onSelect });
+    store.selectOnly(path("docs"));
+    store.confirmSelection();
+    expect(onSelect).toHaveBeenCalledWith(path("docs"));
+  });
+
+  it("目錄模式: 無選取時可確認, 回傳目前目錄 (單選模式回傳字串)", async () => {
+    const onSelect = vi.fn();
+    const store = await readyStore({ selectionMode: "dir", returnMode: "single", onSelect });
+    expect(store.getSnapshot().selection).toEqual([]);
+    expect(store.getSnapshot().canConfirmSelection).toBe(true);
+    store.confirmSelection();
+    expect(onSelect).toHaveBeenCalledWith(HOME);
+  });
+
+  it("目錄模式: 無選取時可確認, 回傳目前目錄 (多選模式回傳只含該路徑的陣列)", async () => {
+    const onSelect = vi.fn();
+    const store = await readyStore({ selectionMode: "dir", returnMode: "multiple", onSelect });
+    expect(store.getSnapshot().canConfirmSelection).toBe(true);
+    store.confirmSelection();
+    expect(onSelect).toHaveBeenCalledWith([HOME]);
+  });
+
+  it("目錄模式: 忙碌 (例如載入中) 時不可確認, 即使無選取", async () => {
+    const store = await readyStore({ selectionMode: "dir" });
+    expect(store.getSnapshot().canConfirmSelection).toBe(true);
+    const pending = store.navigateTo(`${HOME}/docs`);
+    expect(store.getSnapshot().loading).toBe(true);
+    expect(store.getSnapshot().canConfirmSelection).toBe(false);
+    await pending;
+    expect(store.getSnapshot().canConfirmSelection).toBe(true);
+  });
+
+  it("檔案模式: 無選取時不可確認", async () => {
+    const store = await readyStore({ selectionMode: "file" });
+    expect(store.getSnapshot().selection).toEqual([]);
+    expect(store.getSnapshot().canConfirmSelection).toBe(false);
+  });
+
   it("單選模式要求恰好一個, 多選模式至少一個", async () => {
     const single = await readyStore({ returnMode: "single" });
     expect(single.getSnapshot().canConfirmSelection).toBe(false);

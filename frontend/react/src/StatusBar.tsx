@@ -239,5 +239,10 @@ function statusNeutralText(
   if (snapshot.selectedCount > 0) {
     return t("status.itemsSelected", { count: snapshot.itemCount, selected: snapshot.selectedCount });
   }
+  // 目錄模式無選取且目錄已載入時, 提示確認會選取目前目錄 (與 confirmSelection() 的
+  // 行為對齊).
+  if (selectionMode === "dir" && snapshot.currentDir !== "") {
+    return t("status.itemsCurrentDir", { count: snapshot.itemCount });
+  }
   return t("status.items", { count: snapshot.itemCount });
 }

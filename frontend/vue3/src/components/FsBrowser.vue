@@ -413,9 +413,15 @@ const statusText = computed<string>(() => {
   if (props.selectionMode !== "save" && props.returnMode === "single" && snap.selectedCount > 1) {
     return t("status.tooManySelected");
   }
-  return snap.selectedCount > 0
-    ? t("status.itemsSelected", { count: snap.itemCount, selected: snap.selectedCount })
-    : t("status.items", { count: snap.itemCount });
+  if (snap.selectedCount > 0) {
+    return t("status.itemsSelected", { count: snap.itemCount, selected: snap.selectedCount });
+  }
+  // 目錄模式無選取且目錄已載入時, 提示確認會選取目前目錄 (與 confirmSelection() 的
+  // 行為對齊).
+  if (props.selectionMode === "dir" && snap.currentDir !== "") {
+    return t("status.itemsCurrentDir", { count: snap.itemCount });
+  }
+  return t("status.items", { count: snap.itemCount });
 });
 
 /** statusKind 依第 6 章的判定優先序決定狀態列目前呈現的型態, 供動作區與圖示分支使用. */

@@ -519,9 +519,16 @@ export function createBrowserStore(options: BrowserStoreOptions): BrowserStore {
         ? (validateSaveName(state.saveName, state.pathStyle) ??
           (state.saveIsDirectory ? "isDirectory" : null))
         : null;
+    // 目錄模式無選取時比照系統的選擇資料夾對話框: 目錄已載入 (currentDir 非空) 即可
+    // 確認, 確認時回傳目前目錄 (confirmSelection() 對應處理).
+    const emptyDirSelection = selectionMode === "dir" && selection.length === 0;
     // 存檔模式的確認只看檔名是否可用: 不看選取集, 回傳模式無意義, 固定單一路徑.
     const canConfirm =
-      selectionMode === "save" ? saveNameIssue === null && !busy : allSelectable && countOk && !busy;
+      selectionMode === "save"
+        ? saveNameIssue === null && !busy
+        : emptyDirSelection
+          ? state.currentDir !== "" && !busy
+          : allSelectable && countOk && !busy;
 
     return Object.freeze({
       currentDir: state.currentDir,
@@ -1362,6 +1369,15 @@ export function createBrowserStore(options: BrowserStoreOptions): BrowserStore {
           return;
         }
         options.onSelect?.(target);
+        return;
+      }
+
+      // 目錄模式無選取時回傳目前目錄, 與系統的選擇資料夾對話框一致 (canConfirmSelection
+      // 已排除目錄尚未載入或忙碌的情形).
+      if (selectionMode === "dir" && snapshot.selection.length === 0) {
+        const dir = snapshot.currentDir;
+        if (returnMode === "single") options.onSelect?.(dir);
+        else options.onSelect?.([dir]);
         return;
       }
 
