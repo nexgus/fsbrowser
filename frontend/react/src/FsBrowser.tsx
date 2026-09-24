@@ -103,6 +103,8 @@ export function FsBrowser(props: FsBrowserProps) {
   const [menu, setMenu] = useState<MenuState | null>(null);
   const deletingCountRef = useRef(0);
   const listRef = useRef<HTMLDivElement | null>(null);
+  // emptyRef 是空目錄提示區塊的參考, 供 handleListClick 判斷點擊是否落在此區塊之內.
+  const emptyRef = useRef<HTMLDivElement | null>(null);
 
   function commitPath(): void {
     const target = fromDisplayPath(pathDraft);
@@ -229,6 +231,21 @@ export function FsBrowser(props: FsBrowserProps) {
       event.preventDefault();
       void store.paste();
     }
+  }
+
+  /**
+   * handleListClick 只在直接點到空白處 (列表容器本身, 或空目錄提示區塊之內, 而非透過
+   * 冒泡的列或編輯框) 時取得焦點; 未按修飾鍵且非重新命名或建立目錄進行中時, 額外清除
+   * 全部選取, 與 Finder / Windows 檔案總管的行為一致.
+   */
+  function handleListClick(event: ReactMouseEvent<HTMLDivElement>): void {
+    const target = event.target as Node;
+    const isBlank = target === event.currentTarget || (emptyRef.current !== null && emptyRef.current.contains(target));
+    if (!isBlank) return;
+    listRef.current?.focus();
+    if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+    if (snapshot.rename !== null || snapshot.newFolder !== null) return;
+    store.clearSelection();
   }
 
   function handleConfirmDelete(): void {
@@ -369,10 +386,7 @@ export function FsBrowser(props: FsBrowserProps) {
         tabIndex={0}
         onContextMenu={handleListContextMenu}
         onKeyDown={handleListKeyDown}
-        onClick={(event) => {
-          // 只在直接點到空白處 (而非透過冒泡的列或編輯框) 時取得焦點, 避免搶走列內編輯框的焦點.
-          if (event.target === event.currentTarget) listRef.current?.focus();
-        }}
+        onClick={handleListClick}
       >
         {snapshot.loading ? (
           Array.from({ length: SKELETON_ROWS }, (_, index) => (
@@ -382,7 +396,7 @@ export function FsBrowser(props: FsBrowserProps) {
             </div>
           ))
         ) : snapshot.entries.length === 0 && snapshot.newFolder === null ? (
-          <div className="fsb-empty">
+          <div className="fsb-empty" ref={emptyRef}>
             <span className="fsb-empty-icon">
               <IconEmptyFolder />
             </span>

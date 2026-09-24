@@ -175,6 +175,7 @@ The list supports both single- and multi-row selection regardless of `returnMode
 - Ctrl-click (Cmd-click on macOS) toggles that row in or out of the current selection without disturbing the rest.
 - Shift-click selects the contiguous range between the last anchor and the clicked row. The anchor does not move on a Shift-click, so repeated Shift-clicks keep extending or shrinking the range from the same starting point. Dimmed rows (filtered out by `extensions`) inside the range are skipped, never added to the selection.
 - Double-clicking a directory (or a symlink resolving to one) opens it. Double-clicking a selectable file in single-selection mode selects it and immediately confirms, saving a click.
+- A plain click (no Ctrl/Cmd/Shift) on blank space in the list clears the entire selection, matching Finder / File Explorer. It does nothing while a rename or new-folder edit is in progress.
 
 In `returnMode="single"`, the confirm button (Select/Save) is disabled whenever more than one row is selected, and the status bar shows "Only one item can be confirmed." for as long as that's true -- it does not silently pick the first or last selected item. Reducing the selection back to exactly one (or zero-then-one) re-enables confirming.
 

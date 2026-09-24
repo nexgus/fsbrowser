@@ -178,6 +178,8 @@ function chooseRoot(root: string): void {
 // listEl 是列表容器的參考: 點擊列或開啟右鍵選單時主動把焦點移入, 快捷鍵才隨後生效
 // (不依賴瀏覽器對非可聚焦子節點點擊時的預設對焦行為, 各瀏覽器實作不盡相同).
 const listEl = ref<HTMLDivElement | null>(null);
+// emptyEl 是空目錄提示區塊的參考, 供 onListClick 判斷點擊是否落在此區塊之內.
+const emptyEl = ref<HTMLDivElement | null>(null);
 
 function onRowClick(e: MouseEvent, entry: Entry): void {
   listEl.value?.focus();
@@ -215,9 +217,19 @@ function onBlankContextMenu(e: MouseEvent): void {
   contextMenu.value = { x: e.clientX, y: e.clientY, kind: "blank" };
 }
 
-/** onListClick 只在直接點到空白處 (而非透過冒泡的列或編輯框) 時取得焦點, 避免搶走列內編輯框的焦點. */
+/**
+ * onListClick 只在直接點到空白處 (列表容器本身, 或空目錄提示區塊之內, 而非透過冒泡的列
+ * 或編輯框) 時取得焦點; 未按修飾鍵且非重新命名或建立目錄進行中時, 額外清除全部選取,
+ * 與 Finder / Windows 檔案總管的行為一致.
+ */
 function onListClick(e: MouseEvent): void {
-  if (e.target === e.currentTarget) listEl.value?.focus();
+  const target = e.target as Node;
+  const isBlank = target === e.currentTarget || (emptyEl.value !== null && emptyEl.value.contains(target));
+  if (!isBlank) return;
+  listEl.value?.focus();
+  if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+  if (snapshot.value.rename !== null || snapshot.value.newFolder !== null) return;
+  store.clearSelection();
 }
 
 function closeContextMenu(): void {
@@ -596,7 +608,7 @@ function dismissStatus(): void {
       </template>
 
       <!-- 空目錄 -->
-      <div v-else-if="snapshot.ready && snapshot.entries.length === 0 && snapshot.newFolder === null" class="fsb-empty">
+      <div v-else-if="snapshot.ready && snapshot.entries.length === 0 && snapshot.newFolder === null" ref="emptyEl" class="fsb-empty">
         <svg width="48" height="48" viewBox="0 0 16 16" fill="none" stroke="var(--fsb-text-muted)" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
           <path d="M1.5 4 a1 1 0 0 1 1 -1 h3.2 l1.3 1.6 h6 a1 1 0 0 1 1 1 v7.4 a1 1 0 0 1 -1 1 h-10.5 a1 1 0 0 1 -1 -1 z" />
         </svg>
